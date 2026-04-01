@@ -240,8 +240,8 @@ export default async function handler(req, res) {
     if (!createNew && outputUrl) {
       outputSheetId = extractSheetId(outputUrl);
     } else {
-      const created = await sheets.spreadsheets.create({ requestBody:{ properties:{ title:`Hospitalist Financial Report — ${periodLabel}` } } });
-      outputSheetId = created.data.spreadsheetId;
+      const created = await drive.files.create({ requestBody:{ name:`Hospitalist Financial Report — ${periodLabel}`, mimeType:"application/vnd.google-apps.spreadsheet" }, fields:"id" });
+      outputSheetId = created.data.id;
       if (shareEmail) { try { await drive.permissions.create({ fileId:outputSheetId, requestBody:{ type:"user",role:"writer",emailAddress:shareEmail } }); } catch {} }
     }
 

@@ -73,10 +73,14 @@ export default async function handler(req, res) {
       spreadsheetId = extractSheetId(outputUrl);
     } else {
       const now = new Date().toISOString().slice(0,16).replace("T"," ");
-      const created = await sheets.spreadsheets.create({
-        requestBody: { properties: { title: `Hospitalist Parsed Schedule — ${now}` } },
+      const created = await drive.files.create({
+        requestBody: {
+          name: `Hospitalist Parsed Schedule — ${now}`,
+          mimeType: "application/vnd.google-apps.spreadsheet",
+        },
+        fields: "id",
       });
-      spreadsheetId = created.data.spreadsheetId;
+      spreadsheetId = created.data.id;
       if (shareEmail) {
         try {
           await drive.permissions.create({
