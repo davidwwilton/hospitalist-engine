@@ -1,5 +1,24 @@
 import { useState, useEffect } from "react";
-import { biweeklyPeriodsForMonth } from "../lib/financialEngine";
+
+const MONTH_ABBR = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function biweeklyPeriodsForMonth(anchorStr, monthName) {
+  const mn = monthName.trim().toLowerCase().slice(0,3);
+  const m = MONTH_ABBR[mn];
+  if (!m) return [];
+  const YEAR = 2026;
+  const mStart = new Date(YEAR, m-1, 1);
+  const mEnd = new Date(YEAR, m-1, new Date(YEAR, m, 0).getDate());
+  const anchor = new Date(anchorStr);
+  let start = new Date(anchor);
+  const yearStart = new Date(YEAR, 0, 1);
+  while (start > yearStart) start = addDays(start, -14);
+  if (addDays(start, 13) < yearStart) start = addDays(start, 14);
+  const periods = [];
+  const yearEnd = new Date(YEAR, 11, 31);
+  while (start <= yearEnd) { periods.push([new Date(start), addDays(start, 13)]); start = addDays(start, 14); }
+  return periods.filter(([s,e]) => s <= mEnd && e >= mStart);
+}
 
 const ALL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
