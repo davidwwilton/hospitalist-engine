@@ -103,7 +103,7 @@ export default function App() {
         <div className="header-left">
           <div className="logo-mark">H</div>
           <div className="header-titles">
-            <h1>Hospitalist Engine</h1>
+            <h1>Hospitalist Financial Engine</h1>
             <p className="header-sub">Schedule Parser + Financial Reporter</p>
           </div>
         </div>
