@@ -64,7 +64,7 @@ export default function Step1Parse({ config, onChange, onNext, loading }) {
 
       <div className="form-section">
         <h3>Months to Parse</h3>
-        <p className="section-desc">Leave all unselected to parse every month tab found in the spreadsheet.</p>
+        <p className="section-desc">Select the months you want to parse. If no months are selected, all month tabs in the spreadsheet will be parsed.</p>
         <div className="month-grid">
           {ALL_MONTHS.map((m) => (
             <button

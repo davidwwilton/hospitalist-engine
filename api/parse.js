@@ -120,7 +120,7 @@ function parseTab(rows, sheetName) {
   if (!rows || rows.length < 2) return [];
   const header = rows[0];
   const shiftCols = {};
-  for (let i=3; i<header.length; i++) {
+  for (let i=2; i<header.length; i++) {
     const sid = matchHeader(String(header[i]));
     if (sid) shiftCols[i] = [sid, String(header[i])];
   }
@@ -198,7 +198,7 @@ export default async function handler(req, res) {
     const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties.title" });
     const allTabs = meta.data.sheets.map(s => s.properties.title);
     const monthTabs = months.length > 0
-      ? months
+      ? allTabs.filter(t => months.some(m => t.toLowerCase().includes(m.toLowerCase())))
       : allTabs.filter(t => Object.keys(MONTH_ABBR).some(m => t.toLowerCase().includes(m)));
 
     if (!monthTabs.length) return res.status(400).json({ error: "No month tabs found in spreadsheet." });
