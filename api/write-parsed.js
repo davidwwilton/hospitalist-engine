@@ -85,7 +85,8 @@ export default async function handler(req, res) {
         try {
           await drive.permissions.create({
             fileId: spreadsheetId,
-            requestBody: { type:"user", role:"writer", emailAddress: shareEmail },
+            transferOwnership: true,
+            requestBody: { type:"user", role:"owner", emailAddress: shareEmail },
           });
         } catch {}
       }
@@ -133,6 +134,11 @@ export default async function handler(req, res) {
       ...physicians.map(p => ({ Summary: `  • ${p}` })),
     ];
     await writeSheet(sheets, spreadsheetId, "Summary", ["Summary"], summaryRows);
+
+    // Clean up: remove file from service account's Drive (user owns it now)
+    if (createNew !== false && shareEmail) {
+      try { await drive.files.update({ fileId: spreadsheetId, removeParents: "root" }); } catch {}
+    }
 
     res.status(200).json({ outputUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` });
   } catch (e) {

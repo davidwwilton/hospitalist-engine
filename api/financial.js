@@ -242,7 +242,7 @@ export default async function handler(req, res) {
     } else {
       const created = await drive.files.create({ requestBody:{ name:`Hospitalist Financial Report — ${periodLabel}`, mimeType:"application/vnd.google-apps.spreadsheet" }, fields:"id" });
       outputSheetId = created.data.id;
-      if (shareEmail) { try { await drive.permissions.create({ fileId:outputSheetId, requestBody:{ type:"user",role:"writer",emailAddress:shareEmail } }); } catch {} }
+      if (shareEmail) { try { await drive.permissions.create({ fileId:outputSheetId, transferOwnership:true, requestBody:{ type:"user",role:"owner",emailAddress:shareEmail } }); } catch {} }
     }
 
     const rates = { base:baseRate, eve:eveningRate, on:overnightRate, holdback:holdbackPct };
@@ -282,6 +282,12 @@ export default async function handler(req, res) {
     if (overlapLog.length) await writeSheet(sheets, outputSheetId, "Overlap Log", ["physician","date_a","shift_a","date_b","shift_b","overlap_hours"], overlapLog);
 
     const finalUrl = `https://docs.google.com/spreadsheets/d/${outputSheetId}`;
+
+    // Clean up: remove file from service account's Drive (user owns it now)
+    if (createNew !== false && shareEmail) {
+      try { await drive.files.update({ fileId: outputSheetId, removeParents: "root" }); } catch {}
+    }
+
     res.status(200).json({ kpi, physicianResults, overlapCount:overlapLog.length, periodLabel, outputUrl:finalUrl });
 
   } catch (e) {
