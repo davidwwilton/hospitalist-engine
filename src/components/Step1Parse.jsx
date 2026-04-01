@@ -123,7 +123,7 @@ export default function Step1Parse({ config, onChange, onNext, loading }) {
         <button
           className="btn-primary"
           onClick={handleNext}
-          disabled={loading || !config.sourceUrl}
+          disabled={loading || !config.sourceUrl || config.months.length === 0}
         >
           {loading ? <><span className="spinner" /> Parsing schedule…</> : "Parse Schedule →"}
         </button>

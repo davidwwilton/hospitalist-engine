@@ -197,9 +197,10 @@ export default async function handler(req, res) {
     // Get tab list
     const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties.title" });
     const allTabs = meta.data.sheets.map(s => s.properties.title);
-    const monthTabs = months.length > 0
-      ? allTabs.filter(t => months.some(m => t.toLowerCase().includes(m.toLowerCase())))
-      : allTabs.filter(t => Object.keys(MONTH_ABBR).some(m => t.toLowerCase().includes(m)));
+    if (months.length === 0) {
+      return res.status(400).json({ error: "Please select at least one month to parse." });
+    }
+    const monthTabs = allTabs.filter(t => months.some(m => t.toLowerCase().includes(m.toLowerCase())));
 
     if (!monthTabs.length) return res.status(400).json({ error: "No month tabs found in spreadsheet." });
 
