@@ -146,12 +146,24 @@ function parseTab(rows, sheetName) {
   for (const [ci, [shiftId, colHeader]] of Object.entries(shiftCols)) {
     const idx = parseInt(ci);
     const time = parseShiftTime(refTimes[idx]);
+    let regular_hrs   = parseFloat(refRegular[idx])   || 0;
+    const evening_hrs   = parseFloat(refEvening[idx])   || 0;
+    const overnight_hrs = parseFloat(refOvernight[idx]) || 0;
+
+    // Fallback: if regular_hrs is 0 but valid shift times exist,
+    // calculate total hours from the time range (end - start).
+    // This handles columns where the reference row is empty or
+    // the Google Sheets API truncated trailing cells.
+    if (regular_hrs === 0 && time) {
+      regular_hrs = time.end - time.start;
+    }
+
     colMeta[ci] = {
       start: time?.start ?? null,
       end:   time?.end   ?? null,
-      regular_hrs:   parseFloat(refRegular[idx])   || 0,
-      evening_hrs:   parseFloat(refEvening[idx])   || 0,
-      overnight_hrs: parseFloat(refOvernight[idx]) || 0,
+      regular_hrs,
+      evening_hrs,
+      overnight_hrs,
     };
   }
 
@@ -165,13 +177,12 @@ function parseTab(rows, sheetName) {
       const cell = String(row[parseInt(ci)]||"").trim();
       if (!cell || ["TBA",""].includes(cell.toUpperCase())) continue;
       const meta = colMeta[ci] || {};
-      const payableHrs = meta.regular_hrs + meta.evening_hrs + meta.overnight_hrs;
       entries.push({
         dateStr, dateObj, dateISO: dateISO(dateObj),
         physician_raw: cell, shift_id: shiftId, column_header: colHeader, sheet: sheetName,
         start_time: meta.start, end_time: meta.end,
         regular_hrs: meta.regular_hrs, evening_hrs: meta.evening_hrs, overnight_hrs: meta.overnight_hrs,
-        payable_hrs: payableHrs, invoiceable_hrs: payableHrs,
+        payable_hrs: meta.regular_hrs, invoiceable_hrs: meta.regular_hrs,
       });
     }
   }
