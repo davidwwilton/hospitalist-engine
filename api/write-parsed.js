@@ -62,12 +62,69 @@ export default async function handler(req, res) {
     if (!outputUrl) return res.status(400).json({ error: "Output spreadsheet URL is required." });
     const spreadsheetId = extractSheetId(outputUrl);
 
-    // Build parsed rows — hours come from schedule reference rows, not hardcoded
+    // ── Run overlap detection FIRST so we can deduct from Invoiceable_Hrs ───
+    // Build a map of overlap deductions keyed by physician + dateISO + shift_id
+    const overlapDeductions = {};  // key → hours to deduct
+    const overlapRows = [];
+    {
+      const byPhysician = {};
+      for (const e of entries) {
+        if (!byPhysician[e.physician]) byPhysician[e.physician] = [];
+        byPhysician[e.physician].push(e);
+      }
+
+      for (const [phys, shifts] of Object.entries(byPhysician)) {
+        const sorted = [...shifts].sort((a, b) => {
+          if (a.dateISO !== b.dateISO) return a.dateISO < b.dateISO ? -1 : 1;
+          return (a.start_time || 0) - (b.start_time || 0);
+        });
+
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const a = sorted[i], b = sorted[i + 1];
+          if (a.end_time == null || b.start_time == null || a.start_time == null || b.end_time == null) continue;
+
+          const dateA = new Date(a.dateISO + "T12:00:00");
+          const dateB = new Date(b.dateISO + "T12:00:00");
+          const dayGap = (dateB - dateA) / 86400000;
+
+          const aAbsEnd   = 0 + a.end_time;
+          const bAbsStart = dayGap * 24 + b.start_time;
+          const overlap = Math.max(0, aAbsEnd - bAbsStart);
+
+          if (overlap <= 0) continue;
+
+          // Track deduction for this specific shift entry
+          const bKey = `${b.physician}__${b.dateISO}__${b.shift_id}`;
+          overlapDeductions[bKey] = (overlapDeductions[bKey] || 0) + overlap;
+
+          const bPayable = b.payable_hrs || 0;
+          const bInvoiceable = Math.max(0, bPayable - overlap);
+
+          overlapRows.push({
+            Physician: phys,
+            Shift_A_Date: a.dateStr, Shift_A: a.column_header,
+            Shift_A_Time: `${String(a.start_time).padStart(2,"0")} - ${String(a.end_time > 24 ? a.end_time - 24 : a.end_time).padStart(2,"0")}`,
+            Shift_B_Date: b.dateStr, Shift_B: b.column_header,
+            Shift_B_Time: `${String(b.start_time).padStart(2,"0")} - ${String(b.end_time > 24 ? b.end_time - 24 : b.end_time).padStart(2,"0")}`,
+            Overlap_Hrs: overlap,
+            Shift_B_Paid_Hrs: bPayable,
+            Shift_B_Invoiced_Hrs: bInvoiceable,
+            Deducted_Hrs: overlap,
+            Note: `${overlap}hr overlap deducted from ${b.column_header} invoiceable hours only — physician still paid in full`,
+          });
+        }
+      }
+    }
+
+    // ── Build parsed rows with overlap deductions applied to Invoiceable_Hrs ──
     const parsedHeaders = ["Date","Date_ISO","Month","Day","Physician","Physician_Raw","Name_Status","Shift_ID","Column_Header","Sheet_Tab","Start_Hr","End_Hr","Start_Ext24","End_Ext24","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Payable_Hrs","Invoiceable_Hrs","Is_Weekend","Is_Stat_Holiday"];
     const parsedRows = entries
       .sort((a,b) => a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : a.physician < b.physician ? -1 : 1)
       .map(e => {
         const dateObj = new Date(e.dateISO + "T12:00:00");
+        const eKey = `${e.physician}__${e.dateISO}__${e.shift_id}`;
+        const deduction = overlapDeductions[eKey] || 0;
+        const invoiceable = Math.max(0, (e.invoiceable_hrs ?? 0) - deduction);
         return {
           Date: e.dateStr, Date_ISO: e.dateISO,
           Month: MONTH_FULL[dateObj.getMonth()+1] || "",
@@ -79,7 +136,7 @@ export default async function handler(req, res) {
           End_Hr: e.end_time != null ? String(e.end_time % 24).padStart(2,"0") + ":00" : "",
           Start_Ext24: e.start_time ?? "", End_Ext24: e.end_time ?? "",
           Regular_Hrs: e.regular_hrs ?? 0, Evening_Hrs: e.evening_hrs ?? 0, Overnight_Hrs: e.overnight_hrs ?? 0,
-          Payable_Hrs: e.payable_hrs ?? 0, Invoiceable_Hrs: e.invoiceable_hrs ?? 0,
+          Payable_Hrs: e.payable_hrs ?? 0, Invoiceable_Hrs: invoiceable,
           Is_Weekend: e.is_weekend ? "Y" : "N", Is_Stat_Holiday: e.is_stat_holiday ? "Y" : "N",
         };
       });
@@ -182,67 +239,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // Build "Back to Back Shifts" tab — identifies overlapping consecutive shifts
-    // and shows where invoiceable hours are deducted vs paid hours
+    // Write "Back to Back Shifts" tab (overlap data already computed above)
     {
-      const byPhysician = {};
-      for (const e of entries) {
-        if (!byPhysician[e.physician]) byPhysician[e.physician] = [];
-        byPhysician[e.physician].push(e);
-      }
-
-      const overlapRows = [];
-      for (const [phys, shifts] of Object.entries(byPhysician)) {
-        const sorted = [...shifts].sort((a, b) => {
-          if (a.dateISO !== b.dateISO) return a.dateISO < b.dateISO ? -1 : 1;
-          return (a.start_time || 0) - (b.start_time || 0);
-        });
-
-        for (let i = 0; i < sorted.length - 1; i++) {
-          const a = sorted[i], b = sorted[i + 1];
-          if (a.end_time == null || b.start_time == null || a.start_time == null || b.end_time == null) continue;
-
-          const dateA = new Date(a.dateISO + "T12:00:00");
-          const dateB = new Date(b.dateISO + "T12:00:00");
-          const dayGap = (dateB - dateA) / 86400000;
-
-          // Convert to absolute hours from a common reference to handle all cases:
-          // A shift with start_time=24 on day N actually begins at midnight of day N+1.
-          // So absolute start = dayIndex * 24 + start_time, absolute end = dayIndex * 24 + end_time.
-          const aAbsStart = 0 + a.start_time;           // day A is reference day 0
-          const aAbsEnd   = 0 + a.end_time;
-          const bAbsStart = dayGap * 24 + b.start_time;
-          const bAbsEnd   = dayGap * 24 + b.end_time;
-
-          // Overlap exists only when shift A ends after shift B starts
-          const overlap = Math.max(0, aAbsEnd - bAbsStart);
-
-          if (overlap <= 0) continue;
-
-          const bPayable = b.payable_hrs || 0;
-          const bInvoiceable = Math.max(0, bPayable - overlap);
-
-          overlapRows.push({
-            Physician: phys,
-            Shift_A_Date: a.dateStr, Shift_A: a.column_header,
-            Shift_A_Time: `${String(a.start_time).padStart(2,"0")} - ${String(a.end_time > 24 ? a.end_time - 24 : a.end_time).padStart(2,"0")}`,
-            Shift_B_Date: b.dateStr, Shift_B: b.column_header,
-            Shift_B_Time: `${String(b.start_time).padStart(2,"0")} - ${String(b.end_time > 24 ? b.end_time - 24 : b.end_time).padStart(2,"0")}`,
-            Overlap_Hrs: overlap,
-            Shift_B_Paid_Hrs: bPayable,
-            Shift_B_Invoiced_Hrs: bInvoiceable,
-            Deducted_Hrs: overlap,
-            Note: `${overlap}hr overlap deducted from ${b.column_header} invoiceable hours only — physician still paid in full`,
-          });
-        }
-      }
-
       const overlapHeaders = ["Physician", "Shift_A_Date", "Shift_A", "Shift_A_Time", "Shift_B_Date", "Shift_B", "Shift_B_Time",
            "Overlap_Hrs", "Shift_B_Paid_Hrs", "Shift_B_Invoiced_Hrs", "Deducted_Hrs", "Note"];
       if (overlapRows.length) {
         await writeSheet(sheets, spreadsheetId, "Back to Back Shifts", overlapHeaders, overlapRows);
       } else {
-        // Always create the tab so user can confirm detection ran — show "none found"
         await writeSheet(sheets, spreadsheetId, "Back to Back Shifts", overlapHeaders,
           [{ Physician: "", Shift_A_Date: "", Shift_A: "", Shift_A_Time: "", Shift_B_Date: "", Shift_B: "", Shift_B_Time: "",
              Overlap_Hrs: "", Shift_B_Paid_Hrs: "", Shift_B_Invoiced_Hrs: "", Deducted_Hrs: "",
