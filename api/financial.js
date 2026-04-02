@@ -88,8 +88,11 @@ function detectOverlaps(sorted) {
     if (dayGap !== 1) continue; // must be consecutive days
 
     // Shift A runs until (aEnd - 24) on day B; shift B starts at bStart on day B
+    // Normalise bStart: HOME_CALL uses 24 for midnight in extended-24,
+    // but aRunsUntilNextDay is already in 0-23 range for day B
     const aRunsUntilNextDay = aEnd - 24;
-    const ov = Math.max(0, aRunsUntilNextDay - bStart);
+    const bStartNorm = bStart % 24;
+    const ov = Math.max(0, aRunsUntilNextDay - bStartNorm);
     if (ov > 0) {
       // Deduct from SECOND shift's invoiceable hours only
       const kB=`${b.Date_ISO}__${b.Shift_ID}`;

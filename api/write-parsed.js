@@ -207,7 +207,10 @@ export default async function handler(req, res) {
           if ((dateB - dateA) / 86400000 !== 1) continue; // must be consecutive days
 
           const aRunsUntil = a.end_time - 24;
-          const overlap = Math.max(0, aRunsUntil - b.start_time);
+          // Normalise b.start_time: HOME_CALL uses 24 for midnight in extended-24,
+          // but aRunsUntil is already in 0-23 range for the next day
+          const bStartNorm = b.start_time % 24;
+          const overlap = Math.max(0, aRunsUntil - bStartNorm);
           if (overlap <= 0) continue;
 
           const bPayable = b.payable_hrs || 0;
