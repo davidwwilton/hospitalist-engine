@@ -228,19 +228,31 @@ const MONTH_NAMES_FULL = {
 };
 
 function parseStatHolidays(rows) {
-  // Parses a "Stat Holidays" tab. Each row has a date like "January 1", "February 16", etc.
+  // Parses a "Stat Holidays" tab.
+  // Handles various formats:
+  //   - Column A = "January 1" (simple)
+  //   - Column A = "January 1", B = "Thursday", C = "New Year's Day" (multi-column)
+  //   - Header rows like "Stat Holidays 2026" are skipped
+  //   - Cell may contain extra text after the date, e.g. "January 1 Thursday"
   const holidays = new Set();
   if (!rows?.length) return holidays;
   for (const row of rows) {
-    const cell = String(row[0] || "").trim();
-    if (!cell) continue;
-    // Match "Month Day" format, e.g. "January 1", "December 25"
-    const m = cell.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
-    if (!m) continue;
-    const mon = MONTH_NAMES_FULL[m[1].toLowerCase()];
-    if (!mon) continue;
-    const d = new Date(YEAR, mon - 1, parseInt(m[2]));
-    if (d.getMonth() === mon - 1) holidays.add(dateISO(d));
+    let found = false;
+    // Try each cell in the row to find a "Month Day" pattern
+    for (let c = 0; c < Math.min(row.length, 4) && !found; c++) {
+      const cell = String(row[c] || "").trim();
+      if (!cell) continue;
+      // Match "Month Day" at the start of the cell (don't require end-of-string)
+      const m = cell.match(/^([A-Za-z]+)\s+(\d{1,2})\b/);
+      if (!m) continue;
+      const mon = MONTH_NAMES_FULL[m[1].toLowerCase()];
+      if (!mon) continue;
+      const d = new Date(YEAR, mon - 1, parseInt(m[2]));
+      if (d.getMonth() === mon - 1) {
+        holidays.add(dateISO(d));
+        found = true;
+      }
+    }
   }
   return holidays;
 }
@@ -287,7 +299,8 @@ export default async function handler(req, res) {
     // Load canonical names
     let canonicalNames = [];
     try {
-      const contactResp = await sheets.spreadsheets.values.get({ spreadsheetId, range: contactSheet });
+      const safeContactSheet = `'${contactSheet.replace(/'/g, "''")}'`;
+      const contactResp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeContactSheet });
       canonicalNames = extractCanonicalNames(contactResp.data.values || []);
     } catch (e) {
       return res.status(400).json({ error: `Could not read contact sheet "${contactSheet}": ${e.message}` });
@@ -298,16 +311,21 @@ export default async function handler(req, res) {
     const statTab = allTabs.find(t => t.toLowerCase().includes("stat holiday"));
     if (statTab) {
       try {
-        const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: statTab });
+        // Wrap tab name in single quotes for Sheets API (handles spaces/special chars)
+        const safeRange = `'${statTab.replace(/'/g, "''")}'`;
+        const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeRange });
         statHolidays = parseStatHolidays(resp.data.values || []);
-      } catch { /* no stat holidays tab — that's fine */ }
+      } catch (e) {
+        console.error("Stat holidays read error:", e.message);
+      }
     }
 
     // Parse month tabs
     let allEntries = [];
     for (const tab of monthTabs) {
       try {
-        const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: tab });
+        const safeTab = `'${tab.replace(/'/g, "''")}'`;
+        const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeTab });
         allEntries.push(...parseTab(resp.data.values || [], tab));
       } catch { /* skip unreadable tabs */ }
     }
