@@ -237,11 +237,16 @@ export default async function handler(req, res) {
         }
       }
 
+      const overlapHeaders = ["Physician", "Shift_A_Date", "Shift_A", "Shift_A_Time", "Shift_B_Date", "Shift_B", "Shift_B_Time",
+           "Overlap_Hrs", "Shift_B_Paid_Hrs", "Shift_B_Invoiced_Hrs", "Deducted_Hrs", "Note"];
       if (overlapRows.length) {
-        await writeSheet(sheets, spreadsheetId, "Back to Back Shifts",
-          ["Physician", "Shift_A_Date", "Shift_A", "Shift_A_Time", "Shift_B_Date", "Shift_B", "Shift_B_Time",
-           "Overlap_Hrs", "Shift_B_Paid_Hrs", "Shift_B_Invoiced_Hrs", "Deducted_Hrs", "Note"],
-          overlapRows);
+        await writeSheet(sheets, spreadsheetId, "Back to Back Shifts", overlapHeaders, overlapRows);
+      } else {
+        // Always create the tab so user can confirm detection ran — show "none found"
+        await writeSheet(sheets, spreadsheetId, "Back to Back Shifts", overlapHeaders,
+          [{ Physician: "", Shift_A_Date: "", Shift_A: "", Shift_A_Time: "", Shift_B_Date: "", Shift_B: "", Shift_B_Time: "",
+             Overlap_Hrs: "", Shift_B_Paid_Hrs: "", Shift_B_Invoiced_Hrs: "", Deducted_Hrs: "",
+             Note: "No overlapping back-to-back shifts detected in this parse." }]);
       }
     }
 
