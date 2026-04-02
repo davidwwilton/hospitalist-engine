@@ -39,18 +39,13 @@ const MONTH_ABBR = {
 };
 const YEAR = 2026;
 
-const HEADER_PATTERNS = [
-  [/\bER\s*EVE\b/i,       "ER_EVE"],
-  [/\bWARD\s*EVE\b/i,     "WARD_EVE"],
-  [/\bHOME\s*CALL\b/i,    "HOME_CALL"],
-  [/\bHC\b/i,             "HOME_CALL"],
-  [/\bUCC[\s/]*WARD\b/i,  "UCC_WARD"],
-  [/\bSURGE?\b/i,         "SURGE"],
-  [/\bINTAKE\s*1\b/i,     "INTAKE1"],
-  [/\bINTAKE\s*2\b/i,     "INTAKE2"],
-  [/\bLB\s*8\s*A?\b/i,    "LB8A"],
-  [/\bWARD\b/i,           "WARD"],
-];
+// Shift columns are detected dynamically from column headers.
+// Any column from index 2+ with a non-empty header is treated as a shift column.
+// The shift ID is derived by normalising the header text:
+//   "ER Eve" → "ER_EVE",  "Home Call" → "HOME_CALL",  "UCC/Ward" → "UCC_WARD"
+function headerToShiftId(header) {
+  return header.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
 
 function extractSheetId(url) {
   const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -72,10 +67,9 @@ function dateISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function matchHeader(h) {
-  for (const [pat, id] of HEADER_PATTERNS) if (pat.test(h)) return id;
-  return null;
-}
+// Columns 0 and 1 are reserved for Date and Day — skip them.
+// Any other column with a non-empty header is a shift column.
+const SKIP_HEADERS = new Set(["DATE", "DAY", ""]);
 
 function levenshtein(a, b) {
   a = a.toLowerCase(); b = b.toLowerCase();
@@ -132,8 +126,10 @@ function parseTab(rows, sheetName) {
   const header = rows[0];
   const shiftCols = {};
   for (let i=2; i<header.length; i++) {
-    const sid = matchHeader(String(header[i]));
-    if (sid) shiftCols[i] = [sid, String(header[i])];
+    const raw = String(header[i] || "").trim();
+    if (!raw || SKIP_HEADERS.has(raw.toUpperCase())) continue;
+    const sid = headerToShiftId(raw);
+    if (sid) shiftCols[i] = [sid, raw];
   }
 
   // Extract reference data from rows 4-7 (indices 3-6) per shift column
