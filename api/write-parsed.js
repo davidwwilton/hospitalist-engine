@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     const spreadsheetId = extractSheetId(outputUrl);
 
     // Build parsed rows — hours come from schedule reference rows, not hardcoded
-    const parsedHeaders = ["Date","Date_ISO","Month","Day","Physician","Physician_Raw","Name_Status","Shift_ID","Column_Header","Sheet_Tab","Start_Hr","End_Hr","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Payable_Hrs","Invoiceable_Hrs","Is_Weekend","Is_Stat_Holiday"];
+    const parsedHeaders = ["Date","Date_ISO","Month","Day","Physician","Physician_Raw","Name_Status","Shift_ID","Column_Header","Sheet_Tab","Start_Hr","End_Hr","Start_Ext24","End_Ext24","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Payable_Hrs","Invoiceable_Hrs","Is_Weekend","Is_Stat_Holiday"];
     const parsedRows = entries
       .sort((a,b) => a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : a.physician < b.physician ? -1 : 1)
       .map(e => {
@@ -77,6 +77,7 @@ export default async function handler(req, res) {
           Shift_ID: e.shift_id, Column_Header: e.column_header, Sheet_Tab: e.sheet,
           Start_Hr: e.start_time != null ? String(e.start_time % 24).padStart(2,"0") + ":00" : "",
           End_Hr: e.end_time != null ? String(e.end_time % 24).padStart(2,"0") + ":00" : "",
+          Start_Ext24: e.start_time ?? "", End_Ext24: e.end_time ?? "",
           Regular_Hrs: e.regular_hrs ?? 0, Evening_Hrs: e.evening_hrs ?? 0, Overnight_Hrs: e.overnight_hrs ?? 0,
           Payable_Hrs: e.payable_hrs ?? 0, Invoiceable_Hrs: e.invoiceable_hrs ?? 0,
           Is_Weekend: e.is_weekend ? "Y" : "N", Is_Stat_Holiday: e.is_stat_holiday ? "Y" : "N",
@@ -205,17 +206,16 @@ export default async function handler(req, res) {
           const dateB = new Date(b.dateISO + "T12:00:00");
           const dayGap = (dateB - dateA) / 86400000;
 
-          let overlap = 0;
+          // Convert to absolute hours from a common reference to handle all cases:
+          // A shift with start_time=24 on day N actually begins at midnight of day N+1.
+          // So absolute start = dayIndex * 24 + start_time, absolute end = dayIndex * 24 + end_time.
+          const aAbsStart = 0 + a.start_time;           // day A is reference day 0
+          const aAbsEnd   = 0 + a.end_time;
+          const bAbsStart = dayGap * 24 + b.start_time;
+          const bAbsEnd   = dayGap * 24 + b.end_time;
 
-          if (dayGap === 0) {
-            // Same-day overlap: e.g. daytime (08-17) followed by ER EVE (16-01)
-            overlap = Math.max(0, a.end_time - b.start_time);
-          } else if (dayGap === 1 && a.end_time > 24) {
-            // Cross-midnight overlap: e.g. ER EVE (17-01) on Day 1, HOME CALL (24-08) on Day 2
-            const aRunsUntil = a.end_time - 24;
-            const bStartNorm = b.start_time % 24;
-            overlap = Math.max(0, aRunsUntil - bStartNorm);
-          }
+          // Overlap exists only when shift A ends after shift B starts
+          const overlap = Math.max(0, aAbsEnd - bAbsStart);
 
           if (overlap <= 0) continue;
 

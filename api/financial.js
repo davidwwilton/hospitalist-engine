@@ -75,28 +75,26 @@ function detectOverlaps(sorted) {
   const invoiceDeductions = {}, overlapLog = [];
   for (let i=0; i<sorted.length-1; i++) {
     const a=sorted[i], b=sorted[i+1];
-    const aStart = parseFloat(a.Start_Hr);
-    const aEnd   = parseFloat(a.End_Hr);
-    const bStart = parseFloat(b.Start_Hr);
-    const bEnd   = parseFloat(b.End_Hr);
+    // Use extended-24 values (raw integers) for accurate overlap calculation.
+    // Start_Ext24/End_Ext24 preserve the original convention (e.g. 24 = midnight, 32 = 8am next day).
+    // Fall back to Start_Hr/End_Hr (clock-time strings like "00:00") for older parsed schedules.
+    const aStart = a.Start_Ext24 != null && a.Start_Ext24 !== "" ? parseFloat(a.Start_Ext24) : parseFloat(a.Start_Hr);
+    const aEnd   = a.End_Ext24   != null && a.End_Ext24   !== "" ? parseFloat(a.End_Ext24)   : parseFloat(a.End_Hr);
+    const bStart = b.Start_Ext24 != null && b.Start_Ext24 !== "" ? parseFloat(b.Start_Ext24) : parseFloat(b.Start_Hr);
+    const bEnd   = b.End_Ext24   != null && b.End_Ext24   !== "" ? parseFloat(b.End_Ext24)   : parseFloat(b.End_Hr);
     if (isNaN(aStart)||isNaN(aEnd)||isNaN(bStart)||isNaN(bEnd)) continue;
 
     const dateA=new Date(a.Date_ISO+"T12:00:00"), dateB=new Date(b.Date_ISO+"T12:00:00");
     const dayGap = (dateB-dateA)/(86400000);
 
-    let ov = 0;
+    // Convert to absolute hours from a common reference to handle all cases:
+    // A shift with start_time=24 on day N actually begins at midnight of day N+1.
+    // So absolute start = dayIndex * 24 + start_time, absolute end = dayIndex * 24 + end_time.
+    const aAbsEnd   = 0 + aEnd;
+    const bAbsStart = dayGap * 24 + bStart;
 
-    if (dayGap === 0) {
-      // SAME-DAY overlap: e.g. daytime (08-17) followed by ER EVE (16-01)
-      // Both shifts on the same date — check if A's end exceeds B's start
-      ov = Math.max(0, aEnd - bStart);
-    } else if (dayGap === 1 && aEnd > 24) {
-      // CROSS-MIDNIGHT overlap: e.g. ER EVE (17-01) on Day 1, HOME CALL (24-08) on Day 2
-      // Shift A runs until (aEnd - 24) on Day 2; compare with B's start on Day 2
-      const aRunsUntilNextDay = aEnd - 24;
-      const bStartNorm = bStart % 24;
-      ov = Math.max(0, aRunsUntilNextDay - bStartNorm);
-    }
+    // Overlap exists only when shift A ends after shift B starts
+    let ov = Math.max(0, aAbsEnd - bAbsStart);
 
     if (ov > 0) {
       // Deduct from SECOND shift's invoiceable hours only
