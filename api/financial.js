@@ -11,17 +11,8 @@ import { google } from "googleapis";
 const YEAR = 2026;
 const MONTH_ABBR = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 
-const SHIFT_DEF_MAP = {
-  LB8A:      { start:8,  end:17, payable:9, invoiceable:9 },
-  SURGE:     { start:8,  end:17, payable:9, invoiceable:9 },
-  INTAKE1:   { start:8,  end:17, payable:9, invoiceable:9 },
-  INTAKE2:   { start:8,  end:17, payable:9, invoiceable:9 },
-  WARD:      { start:8,  end:17, payable:9, invoiceable:9 },
-  ER_EVE:    { start:16, end:25, payable:9, invoiceable:9 },
-  WARD_EVE:  { start:17, end:25, payable:8, invoiceable:8 },
-  HOME_CALL: { start:24, end:32, payable:8, invoiceable:8, afterHoursOverride:{eveningHours:0,overnightHours:0} },
-  UCC_WARD:  { start:17, end:32, payable:9, invoiceable:9, afterHoursOverride:{eveningHours:4,overnightHours:0} },
-};
+// Shift definitions are now read dynamically from the parsed schedule.
+// No hardcoded SHIFT_DEF_MAP needed.
 
 function extractSheetId(url) {
   const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -71,44 +62,42 @@ function parseDateSimple(s) {
   return new Date(YEAR, mon-1, parseInt(m[1]));
 }
 
-function overlapHrs(s1,e1,s2,e2) { return Math.max(0, Math.min(e1,e2)-Math.max(s1,s2)); }
-
-function computeAfterHours(shiftId, payableHrs, overlapDeduction=0) {
-  const defn = SHIFT_DEF_MAP[shiftId];
-  if (!defn) return { eveHrs:0, onHrs:0, regHrs:payableHrs, adjPayable:payableHrs };
-  const adjPayable = Math.max(0, payableHrs - overlapDeduction);
-  let eveHrsFull, onHrsFull;
-  if (defn.afterHoursOverride) {
-    eveHrsFull = defn.afterHoursOverride.eveningHours;
-    onHrsFull  = defn.afterHoursOverride.overnightHours;
-  } else {
-    eveHrsFull = overlapHrs(defn.start, defn.end, 18, 24);
-    onHrsFull  = overlapHrs(defn.start, defn.end, 24, 32);
-  }
-  const scale = defn.payable > 0 ? adjPayable/defn.payable : 1;
-  const eveHrs = eveHrsFull*scale, onHrs = onHrsFull*scale;
-  return { eveHrs, onHrs, regHrs: adjPayable-eveHrs-onHrs, adjPayable };
-}
-
+/**
+ * Detect overlapping hours between consecutive shifts for the same physician.
+ * Uses Start_Hr / End_Hr from parsed schedule (extended-24 convention: if end <= start, end += 24).
+ *
+ * Overlap deduction rules:
+ * - Overlap hours are deducted from INVOICEABLE hours of the SECOND shift only.
+ * - PAYABLE hours are never affected — physicians are paid as though all hours were worked.
+ * - This prevents double-invoicing the health authority for the same hour.
+ */
 function detectOverlaps(sorted) {
-  const deductions = {}, overlapLog = [];
+  const invoiceDeductions = {}, overlapLog = [];
   for (let i=0; i<sorted.length-1; i++) {
     const a=sorted[i], b=sorted[i+1];
-    const da=SHIFT_DEF_MAP[a.Shift_ID]||{}, db=SHIFT_DEF_MAP[b.Shift_ID]||{};
-    if ((da.end||0)<=24) continue;
+    const aStart = parseFloat(a.Start_Hr);
+    const aEnd   = parseFloat(a.End_Hr);
+    const bStart = parseFloat(b.Start_Hr);
+    const bEnd   = parseFloat(b.End_Hr);
+    if (isNaN(aStart)||isNaN(aEnd)||isNaN(bStart)||isNaN(bEnd)) continue;
+
+    // Check if shift A crosses midnight and shift B starts the next day
+    if (aEnd <= 24) continue; // shift A doesn't extend past midnight
     const dateA=new Date(a.Date_ISO+"T12:00:00"), dateB=new Date(b.Date_ISO+"T12:00:00");
-    if ((dateB-dateA)/(86400000)!==1) continue;
-    const aRunsUntil=da.end-24;
-    const bStarts=Math.max(0, (db.start||0)>=24 ? db.start-24 : db.start||0);
-    const ov=Math.max(0, aRunsUntil-bStarts);
-    if (ov>0) {
-      const kA=`${a.Date_ISO}__${a.Shift_ID}`, kB=`${b.Date_ISO}__${b.Shift_ID}`;
-      deductions[kA]=(deductions[kA]||0)+ov;
-      deductions[kB]=(deductions[kB]||0)+ov;
+    const dayGap = (dateB-dateA)/(86400000);
+    if (dayGap !== 1) continue; // must be consecutive days
+
+    // Shift A runs until (aEnd - 24) on day B; shift B starts at bStart on day B
+    const aRunsUntilNextDay = aEnd - 24;
+    const ov = Math.max(0, aRunsUntilNextDay - bStart);
+    if (ov > 0) {
+      // Deduct from SECOND shift's invoiceable hours only
+      const kB=`${b.Date_ISO}__${b.Shift_ID}`;
+      invoiceDeductions[kB] = (invoiceDeductions[kB]||0) + ov;
       overlapLog.push({ physician:a.Physician, date_a:a.Date_ISO, shift_a:a.Shift_ID, date_b:b.Date_ISO, shift_b:b.Shift_ID, overlap_hours:ov });
     }
   }
-  return { deductions, overlapLog };
+  return { invoiceDeductions, overlapLog };
 }
 
 function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, overnightRate, holdbackPct) {
@@ -124,28 +113,70 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
 
   const physicianResults={}, allOverlapLog=[];
   for (const [phys, shifts] of Object.entries(byPhysician)) {
+    // Sort by date then by shift start time (from parsed schedule)
     const sorted = [...shifts].sort((a,b) => {
       if (a.Date_ISO!==b.Date_ISO) return a.Date_ISO<b.Date_ISO?-1:1;
-      return (SHIFT_DEF_MAP[a.Shift_ID]?.start||0)-(SHIFT_DEF_MAP[b.Shift_ID]?.start||0);
+      return (parseFloat(a.Start_Hr)||0) - (parseFloat(b.Start_Hr)||0);
     });
-    const { deductions, overlapLog } = detectOverlaps(sorted);
+
+    // Detect overlapping back-to-back shifts — deduction applies to invoiceable hours only
+    const { invoiceDeductions, overlapLog } = detectOverlaps(sorted);
     allOverlapLog.push(...overlapLog);
 
-    let totPayable=0, totInvoiceable=0, totReg=0, totEve=0, totOn=0, totGross=0;
+    let totPayable=0, totInvoiceable=0, totReg=0, totEve=0, totOn=0, totGross=0, totWkndBonus=0, totStatBonus=0;
     const shiftDetails=[];
     for (const shift of sorted) {
-      const defn=SHIFT_DEF_MAP[shift.Shift_ID]||{};
-      const payableHrs=parseFloat(shift.Payable_Hrs)||(defn.payable||0);
-      const invoiceableHrs=parseFloat(shift.Invoiceable_Hrs)||(defn.invoiceable||0);
-      const ovKey=`${shift.Date_ISO}__${shift.Shift_ID}`;
-      const ovDeduction=deductions[ovKey]||0;
-      const { eveHrs, onHrs, regHrs, adjPayable } = computeAfterHours(shift.Shift_ID, payableHrs, ovDeduction);
-      const basePay=regHrs*baseRate, evePay=eveHrs*eveningRate, onPay=onHrs*overnightRate, gross=basePay+evePay+onPay;
-      totPayable+=adjPayable; totInvoiceable+=invoiceableHrs; totReg+=regHrs; totEve+=eveHrs; totOn+=onHrs; totGross+=gross;
-      shiftDetails.push({ date:shift.Date, date_iso:shift.Date_ISO, shift:shift.Shift_ID, column_header:shift.Column_Header||"", payable_hrs:adjPayable, invoiceable_hrs:invoiceableHrs, regular_hrs:regHrs, evening_hrs:eveHrs, overnight_hrs:onHrs, base_pay:basePay, eve_pay:evePay, on_pay:onPay, gross, overlap_deducted:ovDeduction });
+      // Hours come directly from the parsed schedule (read from reference rows)
+      const regHrs    = parseFloat(shift.Regular_Hrs)   || 0;
+      const eveHrs    = parseFloat(shift.Evening_Hrs)   || 0;
+      const onHrs     = parseFloat(shift.Overnight_Hrs) || 0;
+      const payableHrs = regHrs + eveHrs + onHrs;
+
+      // Invoiceable hours = payable, minus any overlap deduction on this shift
+      const ovKey = `${shift.Date_ISO}__${shift.Shift_ID}`;
+      const ovDeduction = invoiceDeductions[ovKey] || 0;
+      const invoiceableHrs = Math.max(0, payableHrs - ovDeduction);
+
+      const isWeekend = shift.Is_Weekend === "Y";
+      const isStatHoliday = shift.Is_Stat_Holiday === "Y";
+
+      // Base compensation — always based on full payable hours (overlap does NOT reduce pay)
+      const basePay = regHrs * baseRate;
+      const evePay  = eveHrs * (baseRate + eveningRate);
+      const onPay   = onHrs  * (baseRate + overnightRate);
+
+      // Weekend bonus: regular hours (08:00-18:00) get evening bonus rate added
+      // Applies on weekends AND stat holidays
+      const weekendBonus = (isWeekend || isStatHoliday) ? regHrs * eveningRate : 0;
+
+      // Stat holiday bonus: 0.5 × baseRate on ALL hours worked that day
+      const statBonus = isStatHoliday ? payableHrs * (0.5 * baseRate) : 0;
+
+      const gross = basePay + evePay + onPay + weekendBonus + statBonus;
+
+      totPayable += payableHrs; totInvoiceable += invoiceableHrs;
+      totReg += regHrs; totEve += eveHrs; totOn += onHrs;
+      totGross += gross; totWkndBonus += weekendBonus; totStatBonus += statBonus;
+
+      shiftDetails.push({
+        date: shift.Date, date_iso: shift.Date_ISO,
+        shift: shift.Shift_ID, column_header: shift.Column_Header || "",
+        is_weekend: isWeekend, is_stat_holiday: isStatHoliday,
+        payable_hrs: payableHrs, invoiceable_hrs: invoiceableHrs,
+        regular_hrs: regHrs, evening_hrs: eveHrs, overnight_hrs: onHrs,
+        base_pay: basePay, eve_pay: evePay, on_pay: onPay,
+        weekend_bonus: weekendBonus, stat_bonus: statBonus, gross,
+        overlap_deducted: ovDeduction,
+      });
     }
-    const holdback=totGross*(holdbackPct/100), net=totGross-holdback;
-    physicianResults[phys]={ physician:phys, shift_count:shifts.length, payable_hrs:totPayable, invoiceable_hrs:totInvoiceable, regular_hrs:totReg, evening_hrs:totEve, overnight_hrs:totOn, gross:totGross, holdback, net, shift_details:shiftDetails };
+    const holdback = totGross * (holdbackPct/100), net = totGross - holdback;
+    physicianResults[phys] = {
+      physician: phys, shift_count: shifts.length,
+      payable_hrs: totPayable, invoiceable_hrs: totInvoiceable,
+      regular_hrs: totReg, evening_hrs: totEve, overnight_hrs: totOn,
+      weekend_bonus: totWkndBonus, stat_bonus: totStatBonus,
+      gross: totGross, holdback, net, shift_details: shiftDetails,
+    };
   }
 
   const vals = Object.values(physicianResults);
@@ -155,6 +186,9 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
     total_evening_hrs: vals.reduce((s,p)=>s+p.evening_hrs,0),
     total_overnight_hrs: vals.reduce((s,p)=>s+p.overnight_hrs,0),
     total_payable_hrs: vals.reduce((s,p)=>s+p.payable_hrs,0),
+    total_invoiceable_hrs: vals.reduce((s,p)=>s+p.invoiceable_hrs,0),
+    total_weekend_bonus: vals.reduce((s,p)=>s+p.weekend_bonus,0),
+    total_stat_bonus: vals.reduce((s,p)=>s+p.stat_bonus,0),
     total_gross: vals.reduce((s,p)=>s+p.gross,0),
     total_holdback: vals.reduce((s,p)=>s+p.holdback,0),
     total_net: vals.reduce((s,p)=>s+p.net,0),
@@ -251,14 +285,17 @@ export default async function handler(req, res) {
       {KPI:"Total Evening Hours",Value:fh(kpi.total_evening_hrs)},
       {KPI:"Total Overnight Hours",Value:fh(kpi.total_overnight_hrs)},
       {KPI:"Total Payable Hours",Value:fh(kpi.total_payable_hrs)},
+      {KPI:"Total Invoiceable Hours",Value:fh(kpi.total_invoiceable_hrs)},
+      {KPI:"Total Weekend Bonus",Value:fm(kpi.total_weekend_bonus)},
+      {KPI:"Total Stat Holiday Bonus",Value:fm(kpi.total_stat_bonus)},
       {KPI:"Total Gross Pay",Value:fm(kpi.total_gross)},
       {KPI:"Total Holdback",Value:fm(kpi.total_holdback)},
       {KPI:"Total Net Payout",Value:fm(kpi.total_net)},
     ]);
 
     // Payroll Summary
-    const payRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Shift_Count:p.shift_count, Payable_Hrs:fh(p.payable_hrs), Invoiceable_Hrs:fh(p.invoiceable_hrs), Regular_Hrs:fh(p.regular_hrs), Evening_Hrs:fh(p.evening_hrs), Overnight_Hrs:fh(p.overnight_hrs), Gross_Pay:fm(p.gross), Holdback:fm(p.holdback), Net_Pay:fm(p.net) }));
-    await writeSheet(sheets, outputSheetId, "Payroll Summary", ["Physician","Shift_Count","Payable_Hrs","Invoiceable_Hrs","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Gross_Pay","Holdback","Net_Pay"], payRows);
+    const payRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Shift_Count:p.shift_count, Payable_Hrs:fh(p.payable_hrs), Invoiceable_Hrs:fh(p.invoiceable_hrs), Regular_Hrs:fh(p.regular_hrs), Evening_Hrs:fh(p.evening_hrs), Overnight_Hrs:fh(p.overnight_hrs), Weekend_Bonus:fm(p.weekend_bonus), Stat_Bonus:fm(p.stat_bonus), Gross_Pay:fm(p.gross), Holdback:fm(p.holdback), Net_Pay:fm(p.net) }));
+    await writeSheet(sheets, outputSheetId, "Payroll Summary", ["Physician","Shift_Count","Payable_Hrs","Invoiceable_Hrs","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Weekend_Bonus","Stat_Bonus","Gross_Pay","Holdback","Net_Pay"], payRows);
 
     // HA Invoice
     const invRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Invoiceable_Hrs:fh(p.invoiceable_hrs), Regular_Hrs:fh(p.regular_hrs), Evening_Hrs:fh(p.evening_hrs), Overnight_Hrs:fh(p.overnight_hrs), Invoice_Amount:fm(p.gross) }));
@@ -268,9 +305,9 @@ export default async function handler(req, res) {
     const detRows = [];
     for (const phys of Object.keys(physicianResults).sort()) {
       const p=physicianResults[phys];
-      for (const sd of p.shift_details) detRows.push({ Physician:p.physician, Date:sd.date, Shift:sd.shift, Column:sd.column_header, Payable_Hrs:fh(sd.payable_hrs), Invoiceable_Hrs:fh(sd.invoiceable_hrs), Regular_Hrs:fh(sd.regular_hrs), Evening_Hrs:fh(sd.evening_hrs), Overnight_Hrs:fh(sd.overnight_hrs), Base_Pay:fm(sd.base_pay), Evening_Pay:fm(sd.eve_pay), Overnight_Pay:fm(sd.on_pay), Gross:fm(sd.gross), Overlap_Deducted:fh(sd.overlap_deducted) });
+      for (const sd of p.shift_details) detRows.push({ Physician:p.physician, Date:sd.date, Shift:sd.shift, Column:sd.column_header, Weekend:sd.is_weekend?"Y":"", Stat_Holiday:sd.is_stat_holiday?"Y":"", Payable_Hrs:fh(sd.payable_hrs), Invoiceable_Hrs:fh(sd.invoiceable_hrs), Regular_Hrs:fh(sd.regular_hrs), Evening_Hrs:fh(sd.evening_hrs), Overnight_Hrs:fh(sd.overnight_hrs), Base_Pay:fm(sd.base_pay), Evening_Pay:fm(sd.eve_pay), Overnight_Pay:fm(sd.on_pay), Weekend_Bonus:fm(sd.weekend_bonus), Stat_Bonus:fm(sd.stat_bonus), Gross:fm(sd.gross), Overlap_Deducted:fh(sd.overlap_deducted) });
     }
-    await writeSheet(sheets, outputSheetId, "Physician Detail", ["Physician","Date","Shift","Column","Payable_Hrs","Invoiceable_Hrs","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Base_Pay","Evening_Pay","Overnight_Pay","Gross","Overlap_Deducted"], detRows);
+    await writeSheet(sheets, outputSheetId, "Physician Detail", ["Physician","Date","Shift","Column","Weekend","Stat_Holiday","Payable_Hrs","Invoiceable_Hrs","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Base_Pay","Evening_Pay","Overnight_Pay","Weekend_Bonus","Stat_Bonus","Gross","Overlap_Deducted"], detRows);
 
     // Overlap Log
     if (overlapLog.length) await writeSheet(sheets, outputSheetId, "Overlap Log", ["physician","date_a","shift_a","date_b","shift_b","overlap_hours"], overlapLog);

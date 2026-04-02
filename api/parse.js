@@ -7,20 +7,31 @@
 
 import { google } from "googleapis";
 
-const SHIFT_DEFS = [
-  { id: "LB8A",      start: 8,  end: 17, payable: 9, invoiceable: 9 },
-  { id: "SURGE",     start: 8,  end: 17, payable: 9, invoiceable: 9 },
-  { id: "INTAKE1",   start: 8,  end: 17, payable: 9, invoiceable: 9 },
-  { id: "INTAKE2",   start: 8,  end: 17, payable: 9, invoiceable: 9 },
-  { id: "WARD",      start: 8,  end: 17, payable: 9, invoiceable: 9 },
-  { id: "ER_EVE",    start: 16, end: 25, payable: 9, invoiceable: 9 },
-  { id: "WARD_EVE",  start: 17, end: 25, payable: 8, invoiceable: 8 },
-  { id: "HOME_CALL", start: 24, end: 32, payable: 8, invoiceable: 8,
-    afterHoursOverride: { eveningHours: 0, overnightHours: 0 } },
-  { id: "UCC_WARD",  start: 17, end: 32, payable: 9, invoiceable: 9,
-    afterHoursOverride: { eveningHours: 4, overnightHours: 0 } },
-];
-const SHIFT_DEF_MAP = Object.fromEntries(SHIFT_DEFS.map(s => [s.id, s]));
+// Reference rows in each month tab (0-indexed):
+// Row 0 = column headers (shift names)
+// Row 3 = start/end times per shift column (e.g. "08 - 17", "16 - 01")
+// Row 4 = regular hours to pay per shift column
+// Row 5 = evening bonus hours to pay per shift column
+// Row 6 = overnight bonus hours to pay per shift column
+const REF_ROW_TIMES   = 3;
+const REF_ROW_REGULAR = 4;
+const REF_ROW_EVENING = 5;
+const REF_ROW_OVERNIGHT = 6;
+
+function parseShiftTime(timeStr) {
+  if (!timeStr) return null;
+  const s = String(timeStr).trim();
+  // Handle "08 - 17", "0800-1700", "08-17", "0800 - 1700" etc.
+  const m = s.match(/^(\d{2,4})\s*-\s*(\d{2,4})$/);
+  if (!m) return null;
+  let startVal = m[1], endVal = m[2];
+  // If 4-digit, take first 2 as hours; if 2-digit, use as-is
+  const startHr = parseInt(startVal.length >= 4 ? startVal.slice(0,2) : startVal);
+  const endHr   = parseInt(endVal.length >= 4 ? endVal.slice(0,2) : endVal);
+  // If end <= start, shift crosses midnight — use extended-24 convention
+  const end = endHr <= startHr ? endHr + 24 : endHr;
+  return { start: startHr, end };
+}
 
 const MONTH_ABBR = {
   jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
@@ -124,6 +135,26 @@ function parseTab(rows, sheetName) {
     const sid = matchHeader(String(header[i]));
     if (sid) shiftCols[i] = [sid, String(header[i])];
   }
+
+  // Extract reference data from rows 4-7 (indices 3-6) per shift column
+  const refTimes    = rows[REF_ROW_TIMES]    || [];
+  const refRegular  = rows[REF_ROW_REGULAR]  || [];
+  const refEvening  = rows[REF_ROW_EVENING]  || [];
+  const refOvernight= rows[REF_ROW_OVERNIGHT]|| [];
+
+  const colMeta = {};
+  for (const [ci, [shiftId, colHeader]] of Object.entries(shiftCols)) {
+    const idx = parseInt(ci);
+    const time = parseShiftTime(refTimes[idx]);
+    colMeta[ci] = {
+      start: time?.start ?? null,
+      end:   time?.end   ?? null,
+      regular_hrs:   parseFloat(refRegular[idx])   || 0,
+      evening_hrs:   parseFloat(refEvening[idx])   || 0,
+      overnight_hrs: parseFloat(refOvernight[idx]) || 0,
+    };
+  }
+
   const entries = [];
   for (const row of rows.slice(1)) {
     if (!row?.length) continue;
@@ -133,7 +164,15 @@ function parseTab(rows, sheetName) {
     for (const [ci, [shiftId, colHeader]] of Object.entries(shiftCols)) {
       const cell = String(row[parseInt(ci)]||"").trim();
       if (!cell || ["TBA",""].includes(cell.toUpperCase())) continue;
-      entries.push({ dateStr, dateObj, dateISO: dateISO(dateObj), physician_raw: cell, shift_id: shiftId, column_header: colHeader, sheet: sheetName });
+      const meta = colMeta[ci] || {};
+      const payableHrs = meta.regular_hrs + meta.evening_hrs + meta.overnight_hrs;
+      entries.push({
+        dateStr, dateObj, dateISO: dateISO(dateObj),
+        physician_raw: cell, shift_id: shiftId, column_header: colHeader, sheet: sheetName,
+        start_time: meta.start, end_time: meta.end,
+        regular_hrs: meta.regular_hrs, evening_hrs: meta.evening_hrs, overnight_hrs: meta.overnight_hrs,
+        payable_hrs: payableHrs, invoiceable_hrs: payableHrs,
+      });
     }
   }
   return entries;
@@ -159,20 +198,54 @@ function normaliseNames(entries, canonicalNames, corrections={}) {
   return { entries, nameLog };
 }
 
-function isDaytime(shiftId) {
-  const d = SHIFT_DEF_MAP[shiftId];
-  return d && d.start===8 && d.end===17;
+function isDaytime(entry) {
+  // A daytime shift starts and ends within normal business hours (no crossing midnight)
+  return entry.start_time != null && entry.end_time != null
+    && entry.start_time >= 7 && entry.end_time <= 18 && entry.end_time > entry.start_time;
 }
 
 function collapseDuplicates(entries) {
   const seen = {}, kept = [], dupLog = [];
   for (const e of entries) {
-    if (!isDaytime(e.shift_id)) { kept.push(e); continue; }
+    if (!isDaytime(e)) { kept.push(e); continue; }
     const key = `${e.physician}__${e.dateISO}`;
     if (!(key in seen)) { seen[key]=e.column_header; kept.push(e); }
     else dupLog.push({ physician: e.physician, date: e.dateStr, shift_retained: seen[key], shift_suppressed: e.column_header, reason: "Same-day daytime overlap" });
   }
   return { entries: kept, dupLog };
+}
+
+const MONTH_NAMES_FULL = {
+  january:1, february:2, march:3, april:4, may:5, june:6,
+  july:7, august:8, september:9, october:10, november:11, december:12,
+};
+
+function parseStatHolidays(rows) {
+  // Parses a "Stat Holidays" tab. Each row has a date like "January 1", "February 16", etc.
+  const holidays = new Set();
+  if (!rows?.length) return holidays;
+  for (const row of rows) {
+    const cell = String(row[0] || "").trim();
+    if (!cell) continue;
+    // Match "Month Day" format, e.g. "January 1", "December 25"
+    const m = cell.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+    if (!m) continue;
+    const mon = MONTH_NAMES_FULL[m[1].toLowerCase()];
+    if (!mon) continue;
+    const d = new Date(YEAR, mon - 1, parseInt(m[2]));
+    if (d.getMonth() === mon - 1) holidays.add(dateISO(d));
+  }
+  return holidays;
+}
+
+function tagEntries(entries, statHolidays) {
+  for (const e of entries) {
+    const d = e.dateObj || new Date(e.dateISO + "T12:00:00");
+    const dayOfWeek = d.getDay(); // 0=Sun, 6=Sat
+    e.is_weekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    e.is_stat_holiday = statHolidays.has(e.dateISO);
+  }
+  return entries;
 }
 
 function getAuthClient() {
@@ -213,6 +286,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Could not read contact sheet "${contactSheet}": ${e.message}` });
     }
 
+    // Load stat holidays (optional tab)
+    let statHolidays = new Set();
+    const statTab = allTabs.find(t => t.toLowerCase().includes("stat holiday"));
+    if (statTab) {
+      try {
+        const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: statTab });
+        statHolidays = parseStatHolidays(resp.data.values || []);
+      } catch { /* no stat holidays tab — that's fine */ }
+    }
+
     // Parse month tabs
     let allEntries = [];
     for (const tab of monthTabs) {
@@ -224,13 +307,16 @@ export default async function handler(req, res) {
 
     if (allEntries.length < 5) return res.status(400).json({ error: "Fewer than 5 entries parsed. Check spreadsheet URL and tab names." });
 
+    // Tag weekend and stat holiday entries
+    tagEntries(allEntries, statHolidays);
+
     // Normalise names
     const { entries: normed, nameLog } = normaliseNames(allEntries, canonicalNames, corrections);
 
     // Collapse duplicates
     const { entries, dupLog } = collapseDuplicates(normed);
 
-    res.status(200).json({ entries, canonicalNames, nameLog, dupLog, monthTabs });
+    res.status(200).json({ entries, canonicalNames, nameLog, dupLog, monthTabs, statHolidays: [...statHolidays] });
   } catch (e) {
     console.error("Parse error:", e);
     res.status(500).json({ error: e.message });

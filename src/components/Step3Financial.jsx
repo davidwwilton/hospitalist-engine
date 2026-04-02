@@ -200,7 +200,7 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             </div>
           </div>
           <div className="form-group">
-            <label>Evening Bonus (18:00–24:00)</label>
+            <label>Evening Bonus (18:00–23:00)</label>
             <div className="input-prefix">
               <span>$</span>
               <input
@@ -214,7 +214,7 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             </div>
           </div>
           <div className="form-group">
-            <label>Overnight Bonus (00:00–08:00)</label>
+            <label>Overnight Bonus (23:00–08:00)</label>
             <div className="input-prefix">
               <span>$</span>
               <input
@@ -244,8 +244,9 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
           </div>
         </div>
         <div className="rates-note">
-          <strong>Fixed rules (per spec):</strong> Home Call = base rate only (no after-hours bonus).
-          UCC/Ward = exactly 4 evening hours (fixed override). ER Eve → Home Call midnight overlap = 1hr deducted from both.
+          <strong>How it works:</strong> Regular, evening, and overnight hours per shift are read from the schedule (rows 5–7).
+          Evening/overnight bonus rates are added on top of the base rate. Back-to-back shifts with overlapping hours:
+          overlap is deducted from the second shift's invoiceable hours only (physicians are still paid in full).
         </div>
       </div>
 

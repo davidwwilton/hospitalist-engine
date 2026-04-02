@@ -7,17 +7,8 @@
 
 import { google } from "googleapis";
 
-const SHIFT_DEF_MAP = {
-  LB8A:      { start:8,  end:17, payable:9, invoiceable:9 },
-  SURGE:     { start:8,  end:17, payable:9, invoiceable:9 },
-  INTAKE1:   { start:8,  end:17, payable:9, invoiceable:9 },
-  INTAKE2:   { start:8,  end:17, payable:9, invoiceable:9 },
-  WARD:      { start:8,  end:17, payable:9, invoiceable:9 },
-  ER_EVE:    { start:16, end:25, payable:9, invoiceable:9 },
-  WARD_EVE:  { start:17, end:25, payable:8, invoiceable:8 },
-  HOME_CALL: { start:24, end:32, payable:8, invoiceable:8 },
-  UCC_WARD:  { start:17, end:32, payable:9, invoiceable:9 },
-};
+// Shift definitions are now read dynamically from the schedule reference rows.
+// No hardcoded SHIFT_DEF_MAP needed.
 
 const MONTH_FULL = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -70,12 +61,11 @@ export default async function handler(req, res) {
     if (!outputUrl) return res.status(400).json({ error: "Output spreadsheet URL is required." });
     const spreadsheetId = extractSheetId(outputUrl);
 
-    // Build parsed rows
-    const parsedHeaders = ["Date","Date_ISO","Month","Day","Physician","Physician_Raw","Name_Status","Shift_ID","Column_Header","Sheet_Tab","Start_Hr","End_Hr","Payable_Hrs","Invoiceable_Hrs","Is_Daytime","Has_AfterHours_Override"];
+    // Build parsed rows — hours come from schedule reference rows, not hardcoded
+    const parsedHeaders = ["Date","Date_ISO","Month","Day","Physician","Physician_Raw","Name_Status","Shift_ID","Column_Header","Sheet_Tab","Start_Hr","End_Hr","Regular_Hrs","Evening_Hrs","Overnight_Hrs","Payable_Hrs","Invoiceable_Hrs","Is_Weekend","Is_Stat_Holiday"];
     const parsedRows = entries
       .sort((a,b) => a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : a.physician < b.physician ? -1 : 1)
       .map(e => {
-        const d = SHIFT_DEF_MAP[e.shift_id] || {};
         const dateObj = new Date(e.dateISO + "T12:00:00");
         return {
           Date: e.dateStr, Date_ISO: e.dateISO,
@@ -84,10 +74,10 @@ export default async function handler(req, res) {
           Physician: e.physician, Physician_Raw: e.physician_raw,
           Name_Status: e.name_status || "",
           Shift_ID: e.shift_id, Column_Header: e.column_header, Sheet_Tab: e.sheet,
-          Start_Hr: d.start ?? "", End_Hr: d.end ?? "",
-          Payable_Hrs: d.payable ?? "", Invoiceable_Hrs: d.invoiceable ?? "",
-          Is_Daytime: (d.start===8 && d.end===17) ? "Y" : "N",
-          Has_AfterHours_Override: ["HOME_CALL","UCC_WARD"].includes(e.shift_id) ? "Y" : "N",
+          Start_Hr: e.start_time ?? "", End_Hr: e.end_time ?? "",
+          Regular_Hrs: e.regular_hrs ?? 0, Evening_Hrs: e.evening_hrs ?? 0, Overnight_Hrs: e.overnight_hrs ?? 0,
+          Payable_Hrs: e.payable_hrs ?? 0, Invoiceable_Hrs: e.invoiceable_hrs ?? 0,
+          Is_Weekend: e.is_weekend ? "Y" : "N", Is_Stat_Holiday: e.is_stat_holiday ? "Y" : "N",
         };
       });
 
