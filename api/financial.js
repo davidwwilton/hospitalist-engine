@@ -237,7 +237,7 @@ export default async function handler(req, res) {
 
   try {
     const { parsedUrl, periodType, month, biweeklyStart, biweeklyIndex=0,
-            dateFrom, dateTo, baseRate=150, eveningRate=25, overnightRate=35, holdbackPct=15,
+            dateFrom, dateTo, baseRate=200.10, eveningRate=25, overnightRate=35, holdbackPct=2,
             outputUrl } = req.body;
 
     if (!parsedUrl) return res.status(400).json({ error:"parsedUrl is required" });

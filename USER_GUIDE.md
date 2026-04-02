@@ -55,8 +55,12 @@ The app will read your schedule, match physician names against the Contact Info 
 If the parser finds physician names it can't confidently match, you'll land here.
 
 1. Review each flagged name — the app shows what it found in the schedule vs. what's in the Contact Info tab
-2. Use the dropdowns to correct any mismatches
-3. Click **Confirm Names →**
+2. For each name, you have several options:
+   - **Confirm** the suggested match (if one was found)
+   - **Select from list** — pick the correct name from the canonical Contact Info list
+   - **Use as-is** — keep the name exactly as it appears in the schedule (useful for new physicians not yet added to the Contact Info tab)
+   - **Enter name** — type in the correct full name manually
+3. Click **Confirm & Write Schedule →**
 
 If all names matched automatically, this step is skipped entirely.
 
@@ -70,18 +74,18 @@ This step calculates compensation based on the parsed schedule.
    - **Bi-Weekly** — Select a month, enter a cycle anchor date (the start of any known pay period), then pick the specific two-week window
    - **Custom Range** — Enter a from/to date (e.g. "1-Mar" to "14-Mar")
 3. **Financial Parameters** — Set your rates:
-   - Base Hourly Rate (default $150) — paid for all hours
+   - Base Hourly Rate (default $200.10) — paid for all hours
    - Evening Bonus for 18:00–23:00 (default $25) — added on top of base rate for evening hours
    - Overnight Bonus for 23:00–08:00 (default $35) — added on top of base rate for overnight hours
-   - Overhead Holdback percentage (default 15%)
+   - Overhead Holdback percentage (default 2%)
 4. **Output Spreadsheet URL** — Paste the URL of the blank Google Sheet you created for financial output
 5. Click **Generate Report →**
 
 **How hours and pay work:**
 - The number of regular, evening, and overnight hours per shift type are read from the schedule itself (rows 5–7 of each month tab). This means you can adjust hours dynamically by editing the schedule — no code changes needed.
 - Evening and overnight bonus rates are **added on top of** the base rate. For example, an evening hour pays $150 + $25 = $175.
-- **Weekend bonus:** All regular hours (08:00–18:00) worked on Saturday or Sunday receive the evening bonus rate on top of base rate.
-- **Stat holiday bonus:** All regular hours receive the evening bonus rate (same as weekends), PLUS all hours worked that day (regular, evening, and overnight) receive an additional 0.5 × base hourly rate.
+- **Weekend bonus:** All regular hours worked on Saturday or Sunday receive the evening bonus rate on top of base rate. This is included in the After Hours total.
+- **Stat holiday bonus:** All hours worked on a stat holiday receive an additional 0.5 × base hourly rate. Stat holidays also receive the weekend bonus (evening rate on regular hours). The stat holiday bonus is tracked as its own category in all reports — it is **not** included in the After Hours total.
 - When two shifts overlap (e.g. an evening shift runs past midnight into a next-day shift), the overlapping hours are deducted from the **second** shift's invoiceable hours only. Physicians are still paid in full for all hours worked — the deduction only prevents double-invoicing the health authority.
 
 ### Step 4 — Results
@@ -140,11 +144,29 @@ The parser will automatically detect this tab and apply weekend/stat holiday bon
 
 ---
 
+## Adding a New Shift Type
+
+The engine detects shift columns dynamically from the column headers in your schedule — there is no hardcoded list of shift names. To add a new shift type:
+
+1. **Add a new column** to each month tab in your source schedule. Give it a header in Row 1 (e.g. "Float", "Psych Eve", "Rapid Assess"). The header can be any text.
+2. **Fill in rows 4–7** for that column, just like the existing shifts:
+   - **Row 4** — Shift start and end time (e.g. `08 - 17`, `16 - 01`)
+   - **Row 5** — Total regular/payable hours for the shift (e.g. `9`)
+   - **Row 6** — How many of those hours earn the evening bonus (e.g. `5`, or `0` if none)
+   - **Row 7** — How many of those hours earn the overnight bonus (e.g. `0`)
+3. **Fill in physician names** in the date rows (Row 8+) as usual.
+4. **Run the parser** — the new column will be picked up automatically and appear in the parsed output and financial reports.
+
+That's it. No code changes are needed. The shift ID shown in reports is derived from the header text (uppercased, spaces become underscores), so "Psych Eve" becomes `PSYCH_EVE`.
+
+If you only need the new shift in certain months, just add the column to those month tabs. Months without the column won't be affected.
+
 ## Tips
 
 - **Reuse output spreadsheets.** You don't need a new blank sheet every time — the app overwrites the tabs. Just use the same output URLs for each run.
 - **Check the Physician Detail tab** if numbers look off. It shows every shift individually so you can trace how hours and pay were calculated.
 - **The Overlap Log tab** only appears if there were back-to-back shifts with overlapping hours in the period.
+- **Rows 4–7 must be filled** for every shift column in every month tab. If a column is missing its reference rows, the parser will try to calculate hours from the time range, but evening and overnight bonus hours will default to zero.
 
 ---
 

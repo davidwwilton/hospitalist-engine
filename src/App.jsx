@@ -22,7 +22,7 @@ export default function App() {
     parsedUrl: "", periodType: "month", month: "",
     biweeklyStart: "", biweeklyIndex: 0,
     dateFrom: "", dateTo: "",
-    baseRate: 150, eveningRate: 25, overnightRate: 35, holdbackPct: 15,
+    baseRate: 200.10, eveningRate: 25, overnightRate: 35, holdbackPct: 2,
     outputUrl: "",
   });
 
