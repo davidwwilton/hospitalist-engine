@@ -60,14 +60,57 @@ function extractSheetId(url) {
 }
 
 function parseDateStr(s, year) {
-  const m = s.trim().match(/^(\d{1,2})-([A-Za-z]{3})$/);
-  if (!m) return null;
-  const day = parseInt(m[1]);
-  const mon = MONTH_ABBR[m[2].toLowerCase()];
-  if (!mon) return null;
-  const yr = year || DEFAULT_YEAR;
-  const d = new Date(yr, mon - 1, day);
-  return d.getMonth() === mon - 1 ? d : null;
+  const str = s.trim();
+
+  // Format 1: "1-Mar", "15-Jan" (day-abbreviated month, no year)
+  const m1 = str.match(/^(\d{1,2})-([A-Za-z]{3})$/);
+  if (m1) {
+    const day = parseInt(m1[1]);
+    const mon = MONTH_ABBR[m1[2].toLowerCase()];
+    if (mon) {
+      const yr = year || DEFAULT_YEAR;
+      const d = new Date(yr, mon - 1, day);
+      return d.getMonth() === mon - 1 ? d : null;
+    }
+  }
+
+  // Format 2: full date — "1/1/2026", "01/01/2026", "2026-01-01", "1-1-2026"
+  // Try d/m/y first (common in Canadian/UK schedules)
+  const m2 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m2) {
+    const a = parseInt(m2[1]), b = parseInt(m2[2]), y = parseInt(m2[3]);
+    // d/m/y: day first, month second
+    const d = new Date(y, b - 1, a);
+    if (d.getMonth() === b - 1 && d.getDate() === a) return d;
+  }
+
+  // Try y-m-d (ISO format)
+  const m3 = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (m3) {
+    const y = parseInt(m3[1]), mo = parseInt(m3[2]), da = parseInt(m3[3]);
+    const d = new Date(y, mo - 1, da);
+    if (d.getMonth() === mo - 1 && d.getDate() === da) return d;
+  }
+
+  return null;
+}
+
+// Extract year from the first data row (row 8 / index 7) of a month tab.
+// The first date cell often has a full d/m/y date that subsequent rows derive from.
+function extractYearFromTab(rows) {
+  // Check row index 7 (row 8 in the sheet — first date row after reference rows)
+  // Also try a few rows after in case row 7 is empty
+  for (let i = 7; i < Math.min(rows.length, 12); i++) {
+    const cell = String(rows[i]?.[0] || "").trim();
+    if (!cell) continue;
+    // Look for a 4-digit year in any date format
+    const ym = cell.match(/\b(20\d{2})\b/);
+    if (ym) return parseInt(ym[1]);
+    // Also try parsing as a full date
+    const parsed = parseDateStr(cell);
+    if (parsed) return parsed.getFullYear();
+  }
+  return null;
 }
 
 function dateISO(d) {
@@ -130,6 +173,10 @@ function extractCanonicalNames(rows) {
 
 function parseTab(rows, sheetName, year) {
   if (!rows || rows.length < 2) return [];
+  // Best year source: full date in first data row (row 8), then tab name, then argument
+  const dataYear = extractYearFromTab(rows);
+  const effectiveYear = dataYear || year || DEFAULT_YEAR;
+
   const header = rows[0];
   const shiftCols = {};
   for (let i=2; i<header.length; i++) {
@@ -174,7 +221,7 @@ function parseTab(rows, sheetName, year) {
   for (const row of rows.slice(1)) {
     if (!row?.length) continue;
     const dateStr = String(row[0]||"").trim();
-    const dateObj = parseDateStr(dateStr, year);
+    const dateObj = parseDateStr(dateStr, effectiveYear);
     if (!dateObj) continue;
     for (const [ci, [shiftId, colHeader]] of Object.entries(shiftCols)) {
       const cell = String(row[parseInt(ci)]||"").trim();
