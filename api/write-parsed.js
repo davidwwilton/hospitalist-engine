@@ -161,6 +161,61 @@ export default async function handler(req, res) {
       });
     }
 
+    // Build "Back to Back Shifts" tab — identifies overlapping consecutive shifts
+    // and shows where invoiceable hours are deducted vs paid hours
+    {
+      const byPhysician = {};
+      for (const e of entries) {
+        if (!byPhysician[e.physician]) byPhysician[e.physician] = [];
+        byPhysician[e.physician].push(e);
+      }
+
+      const overlapRows = [];
+      for (const [phys, shifts] of Object.entries(byPhysician)) {
+        const sorted = [...shifts].sort((a, b) => {
+          if (a.dateISO !== b.dateISO) return a.dateISO < b.dateISO ? -1 : 1;
+          return (a.start_time || 0) - (b.start_time || 0);
+        });
+
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const a = sorted[i], b = sorted[i + 1];
+          if (a.end_time == null || b.start_time == null || a.start_time == null || b.end_time == null) continue;
+          if (a.end_time <= 24) continue; // shift A doesn't cross midnight
+
+          const dateA = new Date(a.dateISO + "T12:00:00");
+          const dateB = new Date(b.dateISO + "T12:00:00");
+          if ((dateB - dateA) / 86400000 !== 1) continue; // must be consecutive days
+
+          const aRunsUntil = a.end_time - 24;
+          const overlap = Math.max(0, aRunsUntil - b.start_time);
+          if (overlap <= 0) continue;
+
+          const bPayable = b.payable_hrs || 0;
+          const bInvoiceable = Math.max(0, bPayable - overlap);
+
+          overlapRows.push({
+            Physician: phys,
+            Shift_A_Date: a.dateStr, Shift_A: a.column_header,
+            Shift_A_Time: `${String(a.start_time).padStart(2,"0")} - ${String(a.end_time > 24 ? a.end_time - 24 : a.end_time).padStart(2,"0")}`,
+            Shift_B_Date: b.dateStr, Shift_B: b.column_header,
+            Shift_B_Time: `${String(b.start_time).padStart(2,"0")} - ${String(b.end_time > 24 ? b.end_time - 24 : b.end_time).padStart(2,"0")}`,
+            Overlap_Hrs: overlap,
+            Shift_B_Paid_Hrs: bPayable,
+            Shift_B_Invoiced_Hrs: bInvoiceable,
+            Deducted_Hrs: overlap,
+            Note: `${overlap}hr overlap deducted from ${b.column_header} invoiceable hours only — physician still paid in full`,
+          });
+        }
+      }
+
+      if (overlapRows.length) {
+        await writeSheet(sheets, spreadsheetId, "Back to Back Shifts",
+          ["Physician", "Shift_A_Date", "Shift_A", "Shift_A_Time", "Shift_B_Date", "Shift_B", "Shift_B_Time",
+           "Overlap_Hrs", "Shift_B_Paid_Hrs", "Shift_B_Invoiced_Hrs", "Deducted_Hrs", "Note"],
+          overlapRows);
+      }
+    }
+
     const physicians = [...new Set(entries.map(e=>e.physician))].sort();
     const summaryRows = [
       { Summary: `Parsed: ${parsedRows.length} shift assignments` },
