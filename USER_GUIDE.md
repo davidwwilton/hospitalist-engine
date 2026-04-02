@@ -39,11 +39,11 @@ This step reads your raw schedule and normalises physician names.
 1. Open **hospitalist-engine.vercel.app**
 2. **Schedule Google Sheets URL** — Paste the URL of your source schedule spreadsheet
 3. **Contact Info Tab Name** — Leave as "Contact Info" unless your canonical name list is on a differently named tab
-4. **Months to Parse** — Click the month buttons for the months you want (e.g. "Mar" for March). You must select at least one
+4. **Months to Parse** — Once you enter a valid schedule URL, the app automatically reads the spreadsheet tabs and detects which months (and years) are available. Each year gets its own row of month buttons. Click the months you want to parse — you can select across multiple years in one run. Months that don't have a corresponding tab in the spreadsheet are greyed out
 5. **Output Spreadsheet URL** — Paste the URL of the blank Google Sheet you created for parsed output
 6. Click **Parse Schedule →**
 
-The app will read your schedule, match physician names against the Contact Info list, and write the cleaned data to your output spreadsheet.
+The app will read your schedule, match physician names against the Contact Info list, and write the cleaned data to your output spreadsheet. The parser supports dates in several formats: "1-Mar" (day-abbreviated month), "1/3/2026" (d/m/y), and "2026-03-01" (ISO). The year is determined automatically — first from a full date in the data rows, then from the tab name if it contains a year (e.g. "January 2026"), and finally from your year selection in the UI.
 
 **What can go wrong here:**
 - "Please enter a valid Google Sheets URL" — Make sure the URL looks like `https://docs.google.com/spreadsheets/d/...`
@@ -86,17 +86,28 @@ This step calculates compensation based on the parsed schedule.
 - Evening and overnight bonus rates are **added on top of** the base rate. For example, an evening hour pays $150 + $25 = $175.
 - **Weekend bonus:** All regular hours worked on Saturday or Sunday receive the evening bonus rate on top of base rate. This is included in the After Hours total.
 - **Stat holiday bonus:** All hours worked on a stat holiday receive an additional 0.5 × base hourly rate. Stat holidays also receive the weekend bonus (evening rate on regular hours). The stat holiday bonus is tracked as its own category in all reports — it is **not** included in the After Hours total.
-- When two shifts overlap (e.g. an evening shift runs past midnight into a next-day shift), the overlapping hours are deducted from the **second** shift's invoiceable hours only. Physicians are still paid in full for all hours worked — the deduction only prevents double-invoicing the health authority.
+- **Overlap detection** handles two cases: (1) same-day overlaps, where a daytime shift ends after the next shift starts (e.g. 08–17 followed by 16–01 on the same day = 1 hour overlap), and (2) cross-midnight overlaps, where an evening shift runs past midnight into a next-day shift (e.g. ER EVE 16–01 on Day 1 followed by HOME CALL 00–08 on Day 2 = 1 hour overlap). In both cases the overlapping hours are deducted from the **second** shift's invoiceable hours only. Physicians are still paid in full for all hours worked — the deduction only prevents double-invoicing the health authority.
+
+### Parsed Output Tabs
+
+After parsing completes (Step 1 + Step 2), the parsed output spreadsheet will contain these tabs:
+
+- **Parsed Schedule** — One row per physician-shift-date with all hours and metadata
+- **Clean — January**, **Clean — February**, etc. — One tab per parsed month, mirroring the original schedule layout with corrected physician names and reference rows (times, regular hours, evening hours, overnight hours). Each month gets its own tab so that differences in shift columns between months don't cause formatting issues
+- **Back to Back Shifts** — Identifies overlapping consecutive shifts for the same physician. Always created, even if no overlaps are found (in which case it shows "No overlapping back-to-back shifts detected")
+- **Name Log** — Details on how each physician name was matched or resolved
+- **Duplicate Log** — Any duplicate shifts that were collapsed during parsing
+- **Summary** — Quick stats: total shift assignments, physician count, and the full physician list
 
 ### Step 4 — Results
 
-You'll see KPI summary cards showing totals for the period, plus a link to open the financial report spreadsheet. The report contains four tabs:
+You'll see KPI summary cards showing totals for the period, plus a link to open the financial report spreadsheet. The report contains these tabs:
 
-- **KPI Summary** — Period parameters and aggregate totals
-- **Payroll Summary** — Per-physician compensation breakdown
-- **HA Invoice** — Health authority invoiceable hours and amounts
+- **KPI Summary** — Period parameters and aggregate totals (base pay, after hours bonus, stat holiday bonus, gross pay, holdback, net pay)
+- **Payroll Summary** — Per-physician compensation breakdown including separate columns for Base Pay, After Hours, Stat Bonus, Gross Pay, Holdback, and Net Pay
+- **HA Invoice** — Health authority invoiceable hours and amounts, with a separate Stat Bonus column
 - **Physician Detail** — Every shift for every physician with hour and pay breakdowns
-- **Overlap Log** — (if any) Back-to-back shifts with overlapping hours, showing which shift had invoiceable hours deducted
+- **Overlap Log** — Back-to-back shifts with overlapping hours, showing which shift had invoiceable hours deducted
 
 Click **Open Report ↗** to view the spreadsheet in Google Sheets.
 
@@ -165,7 +176,7 @@ If you only need the new shift in certain months, just add the column to those m
 
 - **Reuse output spreadsheets.** You don't need a new blank sheet every time — the app overwrites the tabs. Just use the same output URLs for each run.
 - **Check the Physician Detail tab** if numbers look off. It shows every shift individually so you can trace how hours and pay were calculated.
-- **The Overlap Log tab** only appears if there were back-to-back shifts with overlapping hours in the period.
+- **The Back to Back Shifts tab** in the parsed output is always created so you can confirm overlap detection ran. If there are no overlapping shifts, the tab will say "No overlapping back-to-back shifts detected."
 - **Rows 4–7 must be filled** for every shift column in every month tab. If a column is missing its reference rows, the parser will try to calculate hours from the time range, but evening and overnight bonus hours will default to zero.
 
 ---
@@ -181,5 +192,16 @@ If you only need the new shift in certain months, just add the column to those m
 | Name shows as UNRESOLVED | The physician name in the schedule doesn't match anything in the Contact Info tab — correct it in Step 2 |
 
 ---
+
+## How the Year Is Determined
+
+The parser determines which year to assign to dates (like "1-Mar" that have no year) using this priority:
+
+1. **Full date in the data** — If row 8 (the first date row) contains a date with a 4-digit year (e.g. "3/1/2026"), that year is used for the entire tab.
+2. **Tab name** — If the tab is named something like "January 2026" or "Feb 2025", the year is extracted from the name.
+3. **UI year selection** — The year you selected in the Step 1 year navigator.
+4. **Current year** — Falls back to the current calendar year if none of the above provide a year.
+
+This means your schedule will parse correctly as long as either the dates include the year, the tabs are named with the year, or you select the right year in the UI.
 
 *Last updated: April 2, 2026*

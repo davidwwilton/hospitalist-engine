@@ -40,9 +40,10 @@ const MONTH_ABBR = {
 const DEFAULT_YEAR = new Date().getFullYear();
 
 // Extract a 4-digit year from a tab name like "January 2026", "Feb 2025", etc.
+// Returns null if no year found (caller should provide a fallback).
 function yearFromTabName(tabName) {
   const m = tabName.match(/\b(20\d{2})\b/);
-  return m ? parseInt(m[1]) : DEFAULT_YEAR;
+  return m ? parseInt(m[1]) : null;
 }
 
 // Shift columns are detected dynamically from column headers.
@@ -289,7 +290,7 @@ function parseStatHolidays(rows, tabName) {
   //   - Header rows like "Stat Holidays 2026" are skipped
   //   - Cell may contain extra text after the date, e.g. "January 1 Thursday"
   // Year is extracted from tab name (e.g. "Stat Holidays 2026") or defaults to current year.
-  const year = yearFromTabName(tabName || "");
+  const year = yearFromTabName(tabName || "") || DEFAULT_YEAR;
   const holidays = new Set();
   if (!rows?.length) return holidays;
   for (const row of rows) {
@@ -348,7 +349,16 @@ export default async function handler(req, res) {
     if (months.length === 0) {
       return res.status(400).json({ error: "Please select at least one month to parse." });
     }
-    const monthTabs = allTabs.filter(t => months.some(m => t.toLowerCase().includes(m.toLowerCase())));
+    // months[] entries are "Jan 2026", "Feb 2026" etc. — strip year for tab matching
+    const monthKeys = months.map(m => {
+      const parts = m.split(/\s+/);
+      return { abbr: parts[0], year: parts[1] ? parseInt(parts[1]) : null };
+    });
+    const monthTabs = allTabs.filter(t =>
+      monthKeys.some(mk => t.toLowerCase().includes(mk.abbr.toLowerCase()))
+    );
+    // Build a year hint from the selected months (use the first one with a year)
+    const selectedYear = monthKeys.find(mk => mk.year)?.year || null;
 
     if (!monthTabs.length) return res.status(400).json({ error: "No month tabs found in spreadsheet." });
 
@@ -382,7 +392,7 @@ export default async function handler(req, res) {
       try {
         const safeTab = `'${tab.replace(/'/g, "''")}'`;
         const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeTab });
-        allEntries.push(...parseTab(resp.data.values || [], tab, yearFromTabName(tab)));
+        allEntries.push(...parseTab(resp.data.values || [], tab, yearFromTabName(tab) || selectedYear));
       } catch { /* skip unreadable tabs */ }
     }
 
