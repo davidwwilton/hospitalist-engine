@@ -83,47 +83,24 @@ export default function Step1Parse({ config, onChange, onNext, loading }) {
 
       <div className="form-section">
         <h3>Output Spreadsheet</h3>
-        <div className="radio-group">
-          <label className="radio-label">
-            <input type="radio" checked={config.createNew} onChange={() => update("createNew", true)} />
-            <span>Create a new spreadsheet</span>
-          </label>
-          <label className="radio-label">
-            <input type="radio" checked={!config.createNew} onChange={() => update("createNew", false)} />
-            <span>Write to an existing spreadsheet</span>
-          </label>
+        <div className="form-group">
+          <label>Output Spreadsheet URL <span className="required">*</span></label>
+          <input
+            type="url"
+            className="form-input"
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+            value={config.outputUrl}
+            onChange={(e) => update("outputUrl", e.target.value)}
+          />
+          <span className="field-hint">Create a blank Google Sheet, share it with the service account, and paste the URL here. The parsed schedule will be written to this spreadsheet.</span>
         </div>
-
-        {config.createNew ? (
-          <div className="form-group">
-            <label>Share new spreadsheet with (optional)</label>
-            <input
-              type="email"
-              className="form-input"
-              placeholder="you@example.com"
-              value={config.shareEmail}
-              onChange={(e) => update("shareEmail", e.target.value)}
-            />
-          </div>
-        ) : (
-          <div className="form-group">
-            <label>Output Spreadsheet URL <span className="required">*</span></label>
-            <input
-              type="url"
-              className="form-input"
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-              value={config.outputUrl}
-              onChange={(e) => update("outputUrl", e.target.value)}
-            />
-          </div>
-        )}
       </div>
 
       <div className="step-actions">
         <button
           className="btn-primary"
           onClick={handleNext}
-          disabled={loading || !config.sourceUrl || config.months.length === 0}
+          disabled={loading || !config.sourceUrl || config.months.length === 0 || !config.outputUrl}
         >
           {loading ? <><span className="spinner" /> Parsing schedule…</> : "Parse Schedule →"}
         </button>

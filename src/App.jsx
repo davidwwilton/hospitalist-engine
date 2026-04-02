@@ -12,7 +12,7 @@ export default function App() {
 
   const [parseConfig, setParseConfig] = useState({
     sourceUrl: "", contactSheet: "Contact Info", months: [],
-    outputUrl: "", shareEmail: "", createNew: true,
+    outputUrl: "",
   });
 
   const [parsedData, setParsedData] = useState(null);
@@ -23,7 +23,7 @@ export default function App() {
     biweeklyStart: "", biweeklyIndex: 0,
     dateFrom: "", dateTo: "",
     baseRate: 150, eveningRate: 25, overnightRate: 35, holdbackPct: 15,
-    outputUrl: "", shareEmail: "", createNew: true,
+    outputUrl: "",
   });
 
   const [results, setResults] = useState(null);

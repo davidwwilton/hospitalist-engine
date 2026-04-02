@@ -32,7 +32,7 @@ function getAuthClient() {
   const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
   return new google.auth.GoogleAuth({
     credentials: key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }
 
@@ -62,35 +62,13 @@ export default async function handler(req, res) {
 
   try {
     const { entries, nameLog, dupLog, config } = req.body;
-    const { outputUrl, shareEmail, createNew } = config;
+    const { outputUrl } = config;
 
     const auth = getAuthClient();
     const sheets = google.sheets({ version:"v4", auth });
-    const drive = google.drive({ version:"v3", auth });
 
-    let spreadsheetId;
-    if (!createNew && outputUrl) {
-      spreadsheetId = extractSheetId(outputUrl);
-    } else {
-      const now = new Date().toISOString().slice(0,16).replace("T"," ");
-      const created = await drive.files.create({
-        requestBody: {
-          name: `Hospitalist Parsed Schedule — ${now}`,
-          mimeType: "application/vnd.google-apps.spreadsheet",
-        },
-        fields: "id",
-      });
-      spreadsheetId = created.data.id;
-      if (shareEmail) {
-        try {
-          await drive.permissions.create({
-            fileId: spreadsheetId,
-            transferOwnership: true,
-            requestBody: { type:"user", role:"owner", emailAddress: shareEmail },
-          });
-        } catch {}
-      }
-    }
+    if (!outputUrl) return res.status(400).json({ error: "Output spreadsheet URL is required." });
+    const spreadsheetId = extractSheetId(outputUrl);
 
     // Build parsed rows
     const parsedHeaders = ["Date","Date_ISO","Month","Day","Physician","Physician_Raw","Name_Status","Shift_ID","Column_Header","Sheet_Tab","Start_Hr","End_Hr","Payable_Hrs","Invoiceable_Hrs","Is_Daytime","Has_AfterHours_Override"];
@@ -134,11 +112,6 @@ export default async function handler(req, res) {
       ...physicians.map(p => ({ Summary: `  • ${p}` })),
     ];
     await writeSheet(sheets, spreadsheetId, "Summary", ["Summary"], summaryRows);
-
-    // Clean up: remove file from service account's Drive (user owns it now)
-    if (createNew !== false && shareEmail) {
-      try { await drive.files.update({ fileId: spreadsheetId, removeParents: "root" }); } catch {}
-    }
 
     res.status(200).json({ outputUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` });
   } catch (e) {

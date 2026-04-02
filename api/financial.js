@@ -2,7 +2,7 @@
  * api/financial.js
  * Vercel serverless function — runs the financial engine using the service account.
  * POST body: { parsedUrl, periodType, month, biweeklyStart, biweeklyIndex, dateFrom, dateTo,
- *              baseRate, eveningRate, overnightRate, holdbackPct, outputUrl, shareEmail, createNew }
+ *              baseRate, eveningRate, overnightRate, holdbackPct, outputUrl }
  * Returns: { kpi, physicianResults, overlapCount, periodLabel, outputUrl }
  */
 
@@ -169,7 +169,7 @@ function getAuthClient() {
   const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
   return new google.auth.GoogleAuth({
     credentials: key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }
 
@@ -195,7 +195,7 @@ export default async function handler(req, res) {
   try {
     const { parsedUrl, periodType, month, biweeklyStart, biweeklyIndex=0,
             dateFrom, dateTo, baseRate=150, eveningRate=25, overnightRate=35, holdbackPct=15,
-            outputUrl, shareEmail, createNew=true } = req.body;
+            outputUrl } = req.body;
 
     if (!parsedUrl) return res.status(400).json({ error:"parsedUrl is required" });
 
@@ -223,7 +223,7 @@ export default async function handler(req, res) {
     // Load parsed schedule
     const auth = getAuthClient();
     const sheets = google.sheets({ version:"v4", auth });
-    const drive  = google.drive({ version:"v3", auth });
+    // Drive API no longer needed — output spreadsheet is always user-provided
     const sheetId = extractSheetId(parsedUrl);
     const resp = await sheets.spreadsheets.values.get({ spreadsheetId:sheetId, range:"Parsed Schedule" });
     const values = resp.data.values||[];
@@ -235,15 +235,9 @@ export default async function handler(req, res) {
     const { physicianResults, overlapLog, kpi } = runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, overnightRate, holdbackPct);
     if (!Object.keys(physicianResults).length) return res.status(400).json({ error:`No shifts found in period ${dateISO(periodStart)}–${dateISO(periodEnd)}. Check the parsed schedule covers this date range.` });
 
-    // Create/open output sheet
-    let outputSheetId;
-    if (!createNew && outputUrl) {
-      outputSheetId = extractSheetId(outputUrl);
-    } else {
-      const created = await drive.files.create({ requestBody:{ name:`Hospitalist Financial Report — ${periodLabel}`, mimeType:"application/vnd.google-apps.spreadsheet" }, fields:"id" });
-      outputSheetId = created.data.id;
-      if (shareEmail) { try { await drive.permissions.create({ fileId:outputSheetId, transferOwnership:true, requestBody:{ type:"user",role:"owner",emailAddress:shareEmail } }); } catch {} }
-    }
+    // Open output sheet
+    if (!outputUrl) return res.status(400).json({ error: "Output spreadsheet URL is required." });
+    const outputSheetId = extractSheetId(outputUrl);
 
     const rates = { base:baseRate, eve:eveningRate, on:overnightRate, holdback:holdbackPct };
 
@@ -282,11 +276,6 @@ export default async function handler(req, res) {
     if (overlapLog.length) await writeSheet(sheets, outputSheetId, "Overlap Log", ["physician","date_a","shift_a","date_b","shift_b","overlap_hours"], overlapLog);
 
     const finalUrl = `https://docs.google.com/spreadsheets/d/${outputSheetId}`;
-
-    // Clean up: remove file from service account's Drive (user owns it now)
-    if (createNew !== false && shareEmail) {
-      try { await drive.files.update({ fileId: outputSheetId, removeParents: "root" }); } catch {}
-    }
 
     res.status(200).json({ kpi, physicianResults, overlapCount:overlapLog.length, periodLabel, outputUrl:finalUrl });
 
