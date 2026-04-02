@@ -51,7 +51,7 @@ export default function App() {
       setParsedData(result);
       const needsReview = result.nameLog.filter(e => e.status === "REVIEW" || e.status === "UNRESOLVED");
       if (needsReview.length === 0) {
-        const written = await apiPost("/api/write-parsed", { entries: result.entries, nameLog: result.nameLog, dupLog: result.dupLog, config: parseConfig });
+        const written = await apiPost("/api/write-parsed", { entries: result.entries, nameLog: result.nameLog, dupLog: result.dupLog, tabStructures: result.tabStructures, config: parseConfig });
         setFinancialConfig(prev => ({ ...prev, parsedUrl: written.outputUrl }));
         setStep(3);
       } else {
@@ -74,6 +74,7 @@ export default function App() {
         entries: correctedEntries,
         nameLog: parsedData.nameLog,
         dupLog: parsedData.dupLog,
+        tabStructures: parsedData.tabStructures,
         config: parseConfig,
       });
       setFinancialConfig(prev => ({ ...prev, parsedUrl: written.outputUrl }));

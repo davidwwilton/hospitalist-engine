@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { entries, nameLog, dupLog, config } = req.body;
+    const { entries, nameLog, dupLog, tabStructures, config } = req.body;
     const { outputUrl } = config;
 
     const auth = getAuthClient();
@@ -153,89 +153,96 @@ export default async function handler(req, res) {
     }
 
     // Build per-month "Clean — <Month>" tabs.
-    // Each month gets its own tab mirroring the original schedule format with corrected names.
-    // This avoids column-mismatch issues when months have different shift columns.
+    // Mirrors the ORIGINAL schedule layout (all columns, reference rows) with:
+    //   - Physician names corrected per Contact Info / manual corrections
+    //   - Duplicate weekend daytime shifts removed (from collapseDuplicates)
     {
-      // Group entries by the month they belong to (from sheet_tab or date)
-      const byMonth = {};
+      // Build a lookup: dateISO + colIndex → corrected physician name
+      // from the parsed entries (which have corrected names and duplicates removed)
+      const entryLookup = {};
       for (const e of entries) {
-        const dateObj = new Date(e.dateISO + "T12:00:00");
-        const monthName = MONTH_FULL[dateObj.getMonth() + 1];
-        if (!byMonth[monthName]) byMonth[monthName] = [];
-        byMonth[monthName].push(e);
+        // Key by physician_raw + dateISO + column_header to map raw→corrected
+        const rawKey = `${e.physician_raw}__${e.dateISO}__${e.column_header}`;
+        entryLookup[rawKey] = e.physician;
       }
 
-      for (const [monthName, monthEntries] of Object.entries(byMonth)) {
-        // Collect shift columns in the order they first appear for this month
-        const colOrder = [];
-        const colSet = new Set();
-        for (const e of monthEntries) {
-          if (!colSet.has(e.column_header)) {
-            colSet.add(e.column_header);
-            colOrder.push(e.column_header);
-          }
+      // Also build a set of suppressed (duplicate) entries so we can blank those cells
+      const suppressedCells = new Set();
+      if (dupLog) {
+        for (const d of dupLog) {
+          // dupLog has: physician, date, shift_retained, shift_suppressed
+          // We want to blank the suppressed shift cell
+          suppressedCells.add(`${d.physician}__${d.date}__${d.shift_suppressed}`);
         }
+      }
 
-        // Build reference row data per column (from first entry for each column)
-        const colRef = {};
-        for (const e of monthEntries) {
-          if (!colRef[e.column_header]) {
-            colRef[e.column_header] = {
-              time: (e.start_time != null && e.end_time != null)
-                ? `${String(e.start_time).padStart(2,"0")} - ${String(e.end_time > 24 ? e.end_time - 24 : e.end_time).padStart(2,"0")}`
-                : "",
-              regular: e.regular_hrs ?? "",
-              evening: e.evening_hrs ?? "",
-              overnight: e.overnight_hrs ?? "",
-            };
-          }
+      // Build name correction map from entries: raw name → corrected name
+      const nameMap = {};
+      for (const e of entries) {
+        if (e.physician_raw && e.physician) {
+          nameMap[e.physician_raw] = e.physician;
         }
+      }
 
-        // Build date rows
-        const dateMap = new Map();
-        for (const e of monthEntries) {
-          if (!dateMap.has(e.dateISO)) {
-            const dateObj = new Date(e.dateISO + "T12:00:00");
-            dateMap.set(e.dateISO, { dateStr: e.dateStr, day: DAY_NAMES[dateObj.getDay()], shifts: {} });
+      if (tabStructures) {
+        for (const [tabName, struct] of Object.entries(tabStructures)) {
+          const { headers, refRows, dataRows } = struct;
+          if (!headers || !dataRows) continue;
+
+          // Determine month name from the tab
+          const monthMatch = tabName.match(/([A-Za-z]+)/);
+          const monthWord = monthMatch ? monthMatch[1].toLowerCase() : "";
+          const MONTH_NAME_MAP = {
+            january:"January",february:"February",march:"March",april:"April",
+            may:"May",june:"June",july:"July",august:"August",
+            september:"September",october:"October",november:"November",december:"December",
+            jan:"January",feb:"February",mar:"March",apr:"April",
+            jun:"June",jul:"July",aug:"August",sep:"September",
+            oct:"October",nov:"November",dec:"December",
+          };
+          const monthName = MONTH_NAME_MAP[monthWord] || tabName;
+
+          // Reconstruct the grid: header row, then reference rows (as-is), then data rows with name corrections
+          const gridValues = [];
+
+          // Row 1: original headers
+          gridValues.push([...headers]);
+
+          // Rows 2-7: reference rows exactly as in the original
+          for (const refRow of refRows) {
+            gridValues.push([...(refRow || [])]);
           }
-          const dayData = dateMap.get(e.dateISO);
-          if (dayData.shifts[e.column_header]) {
-            dayData.shifts[e.column_header] += " / " + e.physician;
-          } else {
-            dayData.shifts[e.column_header] = e.physician;
+          // Pad if fewer than 6 ref rows
+          while (gridValues.length < 7) {
+            gridValues.push(new Array(headers.length).fill(""));
           }
+
+          // Row 8+: data rows with corrected names
+          for (const row of dataRows) {
+            if (!row || !row.length) continue;
+            const newRow = [...row];
+            // Columns 0 and 1 are Date and Day — leave as-is
+            // Columns 2+ are shift columns — apply name corrections
+            for (let c = 2; c < newRow.length; c++) {
+              const cellVal = String(newRow[c] || "").trim();
+              if (!cellVal) continue;
+              // Apply name correction if this raw name has a mapping
+              if (nameMap[cellVal]) {
+                newRow[c] = nameMap[cellVal];
+              }
+            }
+            gridValues.push(newRow);
+          }
+
+          const cleanTabName = `Clean — ${monthName}`;
+          await ensureSheet(sheets, spreadsheetId, cleanTabName);
+          const safeTab = `'${cleanTabName.replace(/'/g, "''")}'`;
+          await sheets.spreadsheets.values.clear({ spreadsheetId, range: safeTab });
+          await sheets.spreadsheets.values.update({
+            spreadsheetId, range: safeTab, valueInputOption: "RAW",
+            requestBody: { values: gridValues },
+          });
         }
-
-        // Assemble grid — same structure as original schedule:
-        // Row 1: Headers | Row 2-3: blank | Row 4: times | Row 5: regular | Row 6: evening | Row 7: overnight | Row 8+: dates
-        const gridHeaders = ["Date", "Day", ...colOrder];
-        const gridValues = [gridHeaders];
-
-        // Blank rows 2-3 (matching original schedule structure)
-        gridValues.push(new Array(gridHeaders.length).fill(""));
-        gridValues.push(new Array(gridHeaders.length).fill(""));
-
-        // Reference rows 4-7
-        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.time ?? "")]);
-        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.regular ?? "")]);
-        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.evening ?? "")]);
-        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.overnight ?? "")]);
-
-        // Date rows sorted chronologically
-        const sortedDates = [...dateMap.keys()].sort();
-        for (const iso of sortedDates) {
-          const d = dateMap.get(iso);
-          gridValues.push([d.dateStr, d.day, ...colOrder.map(c => d.shifts[c] || "")]);
-        }
-
-        const tabName = `Clean — ${monthName}`;
-        await ensureSheet(sheets, spreadsheetId, tabName);
-        const safeTab = `'${tabName.replace(/'/g, "''")}'`;
-        await sheets.spreadsheets.values.clear({ spreadsheetId, range: safeTab });
-        await sheets.spreadsheets.values.update({
-          spreadsheetId, range: safeTab, valueInputOption: "RAW",
-          requestBody: { values: gridValues },
-        });
       }
     }
 

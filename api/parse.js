@@ -386,13 +386,21 @@ export default async function handler(req, res) {
       }
     }
 
-    // Parse month tabs
+    // Parse month tabs — also capture original tab structure for Clean output
     let allEntries = [];
+    const tabStructures = {};  // tabName → { headers, refRows, rows }
     for (const tab of monthTabs) {
       try {
         const safeTab = `'${tab.replace(/'/g, "''")}'`;
         const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeTab });
-        allEntries.push(...parseTab(resp.data.values || [], tab, yearFromTabName(tab) || selectedYear));
+        const rawRows = resp.data.values || [];
+        allEntries.push(...parseTab(rawRows, tab, yearFromTabName(tab) || selectedYear));
+        // Store the original tab structure for Clean tab reconstruction
+        tabStructures[tab] = {
+          headers: rawRows[0] || [],
+          refRows: rawRows.slice(1, 7),  // rows 2-7 (indices 1-6)
+          dataRows: rawRows.slice(7),     // row 8+ (index 7+)
+        };
       } catch { /* skip unreadable tabs */ }
     }
 
@@ -407,7 +415,7 @@ export default async function handler(req, res) {
     // Collapse duplicates
     const { entries, dupLog } = collapseDuplicates(normed);
 
-    res.status(200).json({ entries, canonicalNames, nameLog, dupLog, monthTabs, statHolidays: [...statHolidays] });
+    res.status(200).json({ entries, canonicalNames, nameLog, dupLog, monthTabs, tabStructures, statHolidays: [...statHolidays] });
   } catch (e) {
     console.error("Parse error:", e);
     res.status(500).json({ error: e.message });
