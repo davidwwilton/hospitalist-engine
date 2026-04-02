@@ -92,6 +92,75 @@ export default async function handler(req, res) {
         ["physician","date","shift_retained","shift_suppressed","reason"], dupLog);
     }
 
+    // Build "Clean Schedule" tab — mirrors original schedule format with corrected names
+    {
+      // Collect shift columns in the order they first appear
+      const colOrder = [];
+      const colSet = new Set();
+      for (const e of entries) {
+        if (!colSet.has(e.column_header)) {
+          colSet.add(e.column_header);
+          colOrder.push(e.column_header);
+        }
+      }
+
+      // Build reference row data per column (from first entry for each column)
+      const colRef = {};
+      for (const e of entries) {
+        if (!colRef[e.column_header]) {
+          colRef[e.column_header] = {
+            time: (e.start_time != null && e.end_time != null)
+              ? `${String(e.start_time).padStart(2,"0")} - ${String(e.end_time > 24 ? e.end_time - 24 : e.end_time).padStart(2,"0")}`
+              : "",
+            regular: e.regular_hrs ?? "",
+            evening: e.evening_hrs ?? "",
+            overnight: e.overnight_hrs ?? "",
+          };
+        }
+      }
+
+      // Collect unique dates in order, build a lookup: dateISO → { day, dateStr, shifts: { colHeader → physician } }
+      const dateMap = new Map();
+      for (const e of entries) {
+        if (!dateMap.has(e.dateISO)) {
+          const dateObj = new Date(e.dateISO + "T12:00:00");
+          dateMap.set(e.dateISO, { dateStr: e.dateStr, day: DAY_NAMES[dateObj.getDay()], shifts: {} });
+        }
+        // Place corrected physician name in the cell; if multiple entries for same date+column, join with " / "
+        const dayData = dateMap.get(e.dateISO);
+        if (dayData.shifts[e.column_header]) {
+          dayData.shifts[e.column_header] += " / " + e.physician;
+        } else {
+          dayData.shifts[e.column_header] = e.physician;
+        }
+      }
+
+      // Assemble grid rows
+      const gridHeaders = ["Date", "Day", ...colOrder];
+      const gridValues = [gridHeaders];
+
+      // Reference rows
+      const timeRow = ["Shift Times", "", ...colOrder.map(c => colRef[c]?.time ?? "")];
+      const regRow  = ["Regular Hrs", "", ...colOrder.map(c => colRef[c]?.regular ?? "")];
+      const eveRow  = ["Evening Hrs", "", ...colOrder.map(c => colRef[c]?.evening ?? "")];
+      const onRow   = ["Overnight Hrs", "", ...colOrder.map(c => colRef[c]?.overnight ?? "")];
+      gridValues.push(timeRow, regRow, eveRow, onRow);
+
+      // Date rows
+      const sortedDates = [...dateMap.keys()].sort();
+      for (const iso of sortedDates) {
+        const d = dateMap.get(iso);
+        gridValues.push([d.dateStr, d.day, ...colOrder.map(c => d.shifts[c] || "")]);
+      }
+
+      await ensureSheet(sheets, spreadsheetId, "Clean Schedule");
+      await sheets.spreadsheets.values.clear({ spreadsheetId, range: "Clean Schedule" });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId, range: "Clean Schedule", valueInputOption: "RAW",
+        requestBody: { values: gridValues },
+      });
+    }
+
     const physicians = [...new Set(entries.map(e=>e.physician))].sort();
     const summaryRows = [
       { Summary: `Parsed: ${parsedRows.length} shift assignments` },
