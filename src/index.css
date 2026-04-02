@@ -536,6 +536,45 @@ html, body, #root {
   gap: 8px;
 }
 
+/* ── YEAR SELECTOR ──────────────────────────────────────────────────────────── */
+.year-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.year-selector label {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.year-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.year-display {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 60px;
+  text-align: center;
+}
+.btn-year-nav {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-year-nav:hover {
+  background: var(--bg-card2);
+  color: var(--text);
+}
+
 /* ── MONTH GRID ──────────────────────────────────────────────────────────────── */
 .month-grid {
   display: flex;

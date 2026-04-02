@@ -37,7 +37,13 @@ const MONTH_ABBR = {
   jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
   jul:7,aug:8,sep:9,oct:10,nov:11,dec:12
 };
-const YEAR = 2026;
+const DEFAULT_YEAR = new Date().getFullYear();
+
+// Extract a 4-digit year from a tab name like "January 2026", "Feb 2025", etc.
+function yearFromTabName(tabName) {
+  const m = tabName.match(/\b(20\d{2})\b/);
+  return m ? parseInt(m[1]) : DEFAULT_YEAR;
+}
 
 // Shift columns are detected dynamically from column headers.
 // Any column from index 2+ with a non-empty header is treated as a shift column.
@@ -53,13 +59,14 @@ function extractSheetId(url) {
   return m[1];
 }
 
-function parseDateStr(s) {
+function parseDateStr(s, year) {
   const m = s.trim().match(/^(\d{1,2})-([A-Za-z]{3})$/);
   if (!m) return null;
   const day = parseInt(m[1]);
   const mon = MONTH_ABBR[m[2].toLowerCase()];
   if (!mon) return null;
-  const d = new Date(YEAR, mon - 1, day);
+  const yr = year || DEFAULT_YEAR;
+  const d = new Date(yr, mon - 1, day);
   return d.getMonth() === mon - 1 ? d : null;
 }
 
@@ -121,7 +128,7 @@ function extractCanonicalNames(rows) {
   return rows.slice(1).map(r=>(r[colIdx]||"").trim()).filter(v=>v&&!["TBA","NAME",""].includes(v.toUpperCase()));
 }
 
-function parseTab(rows, sheetName) {
+function parseTab(rows, sheetName, year) {
   if (!rows || rows.length < 2) return [];
   const header = rows[0];
   const shiftCols = {};
@@ -167,7 +174,7 @@ function parseTab(rows, sheetName) {
   for (const row of rows.slice(1)) {
     if (!row?.length) continue;
     const dateStr = String(row[0]||"").trim();
-    const dateObj = parseDateStr(dateStr);
+    const dateObj = parseDateStr(dateStr, year);
     if (!dateObj) continue;
     for (const [ci, [shiftId, colHeader]] of Object.entries(shiftCols)) {
       const cell = String(row[parseInt(ci)]||"").trim();
@@ -227,13 +234,15 @@ const MONTH_NAMES_FULL = {
   july:7, august:8, september:9, october:10, november:11, december:12,
 };
 
-function parseStatHolidays(rows) {
+function parseStatHolidays(rows, tabName) {
   // Parses a "Stat Holidays" tab.
   // Handles various formats:
   //   - Column A = "January 1" (simple)
   //   - Column A = "January 1", B = "Thursday", C = "New Year's Day" (multi-column)
   //   - Header rows like "Stat Holidays 2026" are skipped
   //   - Cell may contain extra text after the date, e.g. "January 1 Thursday"
+  // Year is extracted from tab name (e.g. "Stat Holidays 2026") or defaults to current year.
+  const year = yearFromTabName(tabName || "");
   const holidays = new Set();
   if (!rows?.length) return holidays;
   for (const row of rows) {
@@ -247,7 +256,7 @@ function parseStatHolidays(rows) {
       if (!m) continue;
       const mon = MONTH_NAMES_FULL[m[1].toLowerCase()];
       if (!mon) continue;
-      const d = new Date(YEAR, mon - 1, parseInt(m[2]));
+      const d = new Date(year, mon - 1, parseInt(m[2]));
       if (d.getMonth() === mon - 1) {
         holidays.add(dateISO(d));
         found = true;
@@ -314,7 +323,7 @@ export default async function handler(req, res) {
         // Wrap tab name in single quotes for Sheets API (handles spaces/special chars)
         const safeRange = `'${statTab.replace(/'/g, "''")}'`;
         const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeRange });
-        statHolidays = parseStatHolidays(resp.data.values || []);
+        statHolidays = parseStatHolidays(resp.data.values || [], statTab);
       } catch (e) {
         console.error("Stat holidays read error:", e.message);
       }
@@ -326,7 +335,7 @@ export default async function handler(req, res) {
       try {
         const safeTab = `'${tab.replace(/'/g, "''")}'`;
         const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeTab });
-        allEntries.push(...parseTab(resp.data.values || [], tab));
+        allEntries.push(...parseTab(resp.data.values || [], tab, yearFromTabName(tab)));
       } catch { /* skip unreadable tabs */ }
     }
 

@@ -3,17 +3,24 @@ import { useState } from "react";
 const ALL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export default function Step1Parse({ config, onChange, onNext, loading }) {
   const [urlError, setUrlError] = useState("");
+  const [year, setYear] = useState(CURRENT_YEAR);
 
   const update = (key, val) => onChange((prev) => ({ ...prev, [key]: val }));
 
   const toggleMonth = (m) => {
-    const months = config.months.includes(m)
-      ? config.months.filter((x) => x !== m)
-      : [...config.months, m];
+    // Store as "Jan 2026" so tab matching is year-specific
+    const monthWithYear = `${m} ${year}`;
+    const months = config.months.includes(monthWithYear)
+      ? config.months.filter((x) => x !== monthWithYear)
+      : [...config.months, monthWithYear];
     update("months", months);
   };
+
+  const isMonthSelected = (m) => config.months.includes(`${m} ${year}`);
 
   const validate = () => {
     if (!config.sourceUrl.includes("docs.google.com/spreadsheets")) {
@@ -64,12 +71,20 @@ export default function Step1Parse({ config, onChange, onNext, loading }) {
 
       <div className="form-section">
         <h3>Months to Parse</h3>
-        <p className="section-desc">Select the months you want to parse. If no months are selected, all month tabs in the spreadsheet will be parsed.</p>
+        <p className="section-desc">Select the year and months you want to parse from the schedule.</p>
+        <div className="year-selector">
+          <label>Year</label>
+          <div className="year-controls">
+            <button className="btn-year-nav" onClick={() => setYear(y => y - 1)}>◀</button>
+            <span className="year-display">{year}</span>
+            <button className="btn-year-nav" onClick={() => setYear(y => y + 1)}>▶</button>
+          </div>
+        </div>
         <div className="month-grid">
           {ALL_MONTHS.map((m) => (
             <button
               key={m}
-              className={`month-btn ${config.months.includes(m) ? "selected" : ""}`}
+              className={`month-btn ${isMonthSelected(m) ? "selected" : ""}`}
               onClick={() => toggleMonth(m)}
             >
               {m}
