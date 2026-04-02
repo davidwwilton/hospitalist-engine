@@ -40,10 +40,11 @@ async function ensureSheet(sheets, spreadsheetId, title) {
 
 async function writeSheet(sheets, spreadsheetId, title, headers, rows) {
   await ensureSheet(sheets, spreadsheetId, title);
-  await sheets.spreadsheets.values.clear({ spreadsheetId, range: title });
+  const safeRange = `'${title.replace(/'/g, "''")}'`;
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: safeRange });
   const values = [headers, ...rows.map(r => headers.map(h => String(r[h] ?? "")))];
   await sheets.spreadsheets.values.update({
-    spreadsheetId, range: title, valueInputOption: "RAW",
+    spreadsheetId, range: safeRange, valueInputOption: "RAW",
     requestBody: { values },
   });
 }
@@ -93,149 +94,91 @@ export default async function handler(req, res) {
         ["physician","date","shift_retained","shift_suppressed","reason"], dupLog);
     }
 
-    // Build "Clean Schedule" tab — mirrors original schedule format with corrected names.
-    // Appends new date rows on each parse so dates accumulate consecutively.
+    // Build per-month "Clean — <Month>" tabs.
+    // Each month gets its own tab mirroring the original schedule format with corrected names.
+    // This avoids column-mismatch issues when months have different shift columns.
     {
-      // Collect shift columns in the order they first appear
-      const colOrder = [];
-      const colSet = new Set();
+      // Group entries by the month they belong to (from sheet_tab or date)
+      const byMonth = {};
       for (const e of entries) {
-        if (!colSet.has(e.column_header)) {
-          colSet.add(e.column_header);
-          colOrder.push(e.column_header);
-        }
+        const dateObj = new Date(e.dateISO + "T12:00:00");
+        const monthName = MONTH_FULL[dateObj.getMonth() + 1];
+        if (!byMonth[monthName]) byMonth[monthName] = [];
+        byMonth[monthName].push(e);
       }
 
-      // Build reference row data per column (from first entry for each column)
-      const colRef = {};
-      for (const e of entries) {
-        if (!colRef[e.column_header]) {
-          colRef[e.column_header] = {
-            time: (e.start_time != null && e.end_time != null)
-              ? `${String(e.start_time).padStart(2,"0")} - ${String(e.end_time > 24 ? e.end_time - 24 : e.end_time).padStart(2,"0")}`
-              : "",
-            regular: e.regular_hrs ?? "",
-            evening: e.evening_hrs ?? "",
-            overnight: e.overnight_hrs ?? "",
-          };
-        }
-      }
-
-      // Build new date rows from current parse
-      const newDateMap = new Map();
-      for (const e of entries) {
-        if (!newDateMap.has(e.dateISO)) {
-          const dateObj = new Date(e.dateISO + "T12:00:00");
-          newDateMap.set(e.dateISO, { dateStr: e.dateStr, day: DAY_NAMES[dateObj.getDay()], shifts: {} });
-        }
-        const dayData = newDateMap.get(e.dateISO);
-        if (dayData.shifts[e.column_header]) {
-          dayData.shifts[e.column_header] += " / " + e.physician;
-        } else {
-          dayData.shifts[e.column_header] = e.physician;
-        }
-      }
-
-      // Read existing Clean Schedule to preserve previously parsed dates
-      await ensureSheet(sheets, spreadsheetId, "Clean Schedule");
-      let existingHeaders = null;
-      const existingDateRows = new Map(); // dateISO → row array
-      try {
-        const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Clean Schedule" });
-        const rows = existing.data.values || [];
-        if (rows.length > 0) {
-          existingHeaders = rows[0];
-          // Date rows start after header (row 0) + 2 blank rows + 4 reference rows = row index 7
-          for (let i = 7; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || !row[0]) continue;
-            // Parse "D-Mon" format to get ISO date for dedup
-            const dateStr = String(row[0]).trim();
-            const m = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})$/);
-            if (m) {
-              const monthIdx = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12}[m[2].toLowerCase()];
-              if (monthIdx) {
-                const iso = `2026-${String(monthIdx).padStart(2,"0")}-${String(parseInt(m[1])).padStart(2,"0")}`;
-                existingDateRows.set(iso, row);
-              }
-            }
-          }
-          // Merge any existing columns not in current parse
-          if (existingHeaders.length > 2) {
-            for (let i = 2; i < existingHeaders.length; i++) {
-              const h = existingHeaders[i];
-              if (h && !colSet.has(h)) {
-                colSet.add(h);
-                colOrder.push(h);
-              }
-            }
+      for (const [monthName, monthEntries] of Object.entries(byMonth)) {
+        // Collect shift columns in the order they first appear for this month
+        const colOrder = [];
+        const colSet = new Set();
+        for (const e of monthEntries) {
+          if (!colSet.has(e.column_header)) {
+            colSet.add(e.column_header);
+            colOrder.push(e.column_header);
           }
         }
-      } catch { /* no existing data — that's fine */ }
 
-      // Build column index mapping for existing rows
-      const existingColIndex = {};
-      if (existingHeaders) {
-        for (let i = 0; i < existingHeaders.length; i++) {
-          existingColIndex[existingHeaders[i]] = i;
-        }
-      }
-
-      // Assemble final grid — same structure as original schedule:
-      // Row 1: Headers | Row 2-3: blank | Row 4: times | Row 5: regular | Row 6: evening | Row 7: overnight | Row 8+: dates
-      const gridHeaders = ["Date", "Day", ...colOrder];
-      const gridValues = [gridHeaders];
-
-      // Blank rows 2-3 (matching original schedule structure)
-      gridValues.push(new Array(gridHeaders.length).fill(""));
-      gridValues.push(new Array(gridHeaders.length).fill(""));
-
-      // Reference rows 4-7
-      gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.time ?? "")]);
-      gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.regular ?? "")]);
-      gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.evening ?? "")]);
-      gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.overnight ?? "")]);
-
-      // Merge existing + new dates, new data overwrites existing for the same date
-      const allDates = new Map(existingDateRows);
-      const newDatesISO = new Set(newDateMap.keys());
-      for (const iso of newDatesISO) {
-        const d = newDateMap.get(iso);
-        const row = new Array(gridHeaders.length).fill("");
-        row[0] = d.dateStr;
-        row[1] = d.day;
-        for (let i = 0; i < colOrder.length; i++) {
-          row[i + 2] = d.shifts[colOrder[i]] || "";
-        }
-        allDates.set(iso, row);
-      }
-
-      // For existing dates NOT in the new parse, re-map columns to new header order
-      for (const [iso, row] of allDates) {
-        if (newDatesISO.has(iso)) continue; // already built with new column order
-        const remapped = new Array(gridHeaders.length).fill("");
-        remapped[0] = row[0] || "";
-        remapped[1] = row[1] || "";
-        for (let i = 0; i < colOrder.length; i++) {
-          const oldIdx = existingColIndex[colOrder[i]];
-          if (oldIdx != null && oldIdx < row.length) {
-            remapped[i + 2] = row[oldIdx] || "";
+        // Build reference row data per column (from first entry for each column)
+        const colRef = {};
+        for (const e of monthEntries) {
+          if (!colRef[e.column_header]) {
+            colRef[e.column_header] = {
+              time: (e.start_time != null && e.end_time != null)
+                ? `${String(e.start_time).padStart(2,"0")} - ${String(e.end_time > 24 ? e.end_time - 24 : e.end_time).padStart(2,"0")}`
+                : "",
+              regular: e.regular_hrs ?? "",
+              evening: e.evening_hrs ?? "",
+              overnight: e.overnight_hrs ?? "",
+            };
           }
         }
-        allDates.set(iso, remapped);
-      }
 
-      // Sort all dates and append
-      const sortedDates = [...allDates.keys()].sort();
-      for (const iso of sortedDates) {
-        gridValues.push(allDates.get(iso));
-      }
+        // Build date rows
+        const dateMap = new Map();
+        for (const e of monthEntries) {
+          if (!dateMap.has(e.dateISO)) {
+            const dateObj = new Date(e.dateISO + "T12:00:00");
+            dateMap.set(e.dateISO, { dateStr: e.dateStr, day: DAY_NAMES[dateObj.getDay()], shifts: {} });
+          }
+          const dayData = dateMap.get(e.dateISO);
+          if (dayData.shifts[e.column_header]) {
+            dayData.shifts[e.column_header] += " / " + e.physician;
+          } else {
+            dayData.shifts[e.column_header] = e.physician;
+          }
+        }
 
-      await sheets.spreadsheets.values.clear({ spreadsheetId, range: "Clean Schedule" });
-      await sheets.spreadsheets.values.update({
-        spreadsheetId, range: "Clean Schedule", valueInputOption: "RAW",
-        requestBody: { values: gridValues },
-      });
+        // Assemble grid — same structure as original schedule:
+        // Row 1: Headers | Row 2-3: blank | Row 4: times | Row 5: regular | Row 6: evening | Row 7: overnight | Row 8+: dates
+        const gridHeaders = ["Date", "Day", ...colOrder];
+        const gridValues = [gridHeaders];
+
+        // Blank rows 2-3 (matching original schedule structure)
+        gridValues.push(new Array(gridHeaders.length).fill(""));
+        gridValues.push(new Array(gridHeaders.length).fill(""));
+
+        // Reference rows 4-7
+        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.time ?? "")]);
+        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.regular ?? "")]);
+        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.evening ?? "")]);
+        gridValues.push(["", "", ...colOrder.map(c => colRef[c]?.overnight ?? "")]);
+
+        // Date rows sorted chronologically
+        const sortedDates = [...dateMap.keys()].sort();
+        for (const iso of sortedDates) {
+          const d = dateMap.get(iso);
+          gridValues.push([d.dateStr, d.day, ...colOrder.map(c => d.shifts[c] || "")]);
+        }
+
+        const tabName = `Clean — ${monthName}`;
+        await ensureSheet(sheets, spreadsheetId, tabName);
+        const safeTab = `'${tabName.replace(/'/g, "''")}'`;
+        await sheets.spreadsheets.values.clear({ spreadsheetId, range: safeTab });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId, range: safeTab, valueInputOption: "RAW",
+          requestBody: { values: gridValues },
+        });
+      }
     }
 
     // Build "Back to Back Shifts" tab — identifies overlapping consecutive shifts
