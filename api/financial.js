@@ -81,18 +81,23 @@ function detectOverlaps(sorted) {
     const bEnd   = parseFloat(b.End_Hr);
     if (isNaN(aStart)||isNaN(aEnd)||isNaN(bStart)||isNaN(bEnd)) continue;
 
-    // Check if shift A crosses midnight and shift B starts the next day
-    if (aEnd <= 24) continue; // shift A doesn't extend past midnight
     const dateA=new Date(a.Date_ISO+"T12:00:00"), dateB=new Date(b.Date_ISO+"T12:00:00");
     const dayGap = (dateB-dateA)/(86400000);
-    if (dayGap !== 1) continue; // must be consecutive days
 
-    // Shift A runs until (aEnd - 24) on day B; shift B starts at bStart on day B
-    // Normalise bStart: HOME_CALL uses 24 for midnight in extended-24,
-    // but aRunsUntilNextDay is already in 0-23 range for day B
-    const aRunsUntilNextDay = aEnd - 24;
-    const bStartNorm = bStart % 24;
-    const ov = Math.max(0, aRunsUntilNextDay - bStartNorm);
+    let ov = 0;
+
+    if (dayGap === 0) {
+      // SAME-DAY overlap: e.g. daytime (08-17) followed by ER EVE (16-01)
+      // Both shifts on the same date — check if A's end exceeds B's start
+      ov = Math.max(0, aEnd - bStart);
+    } else if (dayGap === 1 && aEnd > 24) {
+      // CROSS-MIDNIGHT overlap: e.g. ER EVE (17-01) on Day 1, HOME CALL (24-08) on Day 2
+      // Shift A runs until (aEnd - 24) on Day 2; compare with B's start on Day 2
+      const aRunsUntilNextDay = aEnd - 24;
+      const bStartNorm = bStart % 24;
+      ov = Math.max(0, aRunsUntilNextDay - bStartNorm);
+    }
+
     if (ov > 0) {
       // Deduct from SECOND shift's invoiceable hours only
       const kB=`${b.Date_ISO}__${b.Shift_ID}`;

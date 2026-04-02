@@ -200,17 +200,23 @@ export default async function handler(req, res) {
         for (let i = 0; i < sorted.length - 1; i++) {
           const a = sorted[i], b = sorted[i + 1];
           if (a.end_time == null || b.start_time == null || a.start_time == null || b.end_time == null) continue;
-          if (a.end_time <= 24) continue; // shift A doesn't cross midnight
 
           const dateA = new Date(a.dateISO + "T12:00:00");
           const dateB = new Date(b.dateISO + "T12:00:00");
-          if ((dateB - dateA) / 86400000 !== 1) continue; // must be consecutive days
+          const dayGap = (dateB - dateA) / 86400000;
 
-          const aRunsUntil = a.end_time - 24;
-          // Normalise b.start_time: HOME_CALL uses 24 for midnight in extended-24,
-          // but aRunsUntil is already in 0-23 range for the next day
-          const bStartNorm = b.start_time % 24;
-          const overlap = Math.max(0, aRunsUntil - bStartNorm);
+          let overlap = 0;
+
+          if (dayGap === 0) {
+            // Same-day overlap: e.g. daytime (08-17) followed by ER EVE (16-01)
+            overlap = Math.max(0, a.end_time - b.start_time);
+          } else if (dayGap === 1 && a.end_time > 24) {
+            // Cross-midnight overlap: e.g. ER EVE (17-01) on Day 1, HOME CALL (24-08) on Day 2
+            const aRunsUntil = a.end_time - 24;
+            const bStartNorm = b.start_time % 24;
+            overlap = Math.max(0, aRunsUntil - bStartNorm);
+          }
+
           if (overlap <= 0) continue;
 
           const bPayable = b.payable_hrs || 0;
