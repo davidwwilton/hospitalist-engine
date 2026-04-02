@@ -92,8 +92,8 @@ This step calculates compensation based on the parsed schedule.
 
 After parsing completes (Step 1 + Step 2), the parsed output spreadsheet will contain these tabs:
 
-- **Parsed Schedule** — One row per physician-shift-date with all hours and metadata
-- **Clean — January**, **Clean — February**, etc. — One tab per parsed month, mirroring the original schedule layout with corrected physician names and reference rows (times, regular hours, evening hours, overnight hours). Each month gets its own tab so that differences in shift columns between months don't cause formatting issues
+- **Parsed Schedule** — One row per physician-shift-date with all hours and metadata. Invoiceable hours already reflect any overlap deductions (so if a shift has a 1-hour overlap, its Invoiceable_Hrs will show the reduced amount)
+- **Clean — January**, **Clean — February**, etc. — One tab per parsed month, mirroring the original schedule layout exactly — all columns (ER/Intake, OC, Off Service, Surge, Stroke, LB variants, UBC 1–5, UCC/ward, ER eve, Ward eve, Home Call, etc.), all reference rows (times, regular hours, evening hours, overnight hours), and all date rows. The only changes from the original are corrected physician names and removal of duplicate weekend daytime shifts
 - **Back to Back Shifts** — Identifies overlapping consecutive shifts for the same physician. Always created, even if no overlaps are found (in which case it shows "No overlapping back-to-back shifts detected")
 - **Name Log** — Details on how each physician name was matched or resolved
 - **Duplicate Log** — Any duplicate shifts that were collapsed during parsing
@@ -199,9 +199,8 @@ The parser determines which year to assign to dates (like "1-Mar" that have no y
 
 1. **Full date in the data** — If row 8 (the first date row) contains a date with a 4-digit year (e.g. "3/1/2026"), that year is used for the entire tab.
 2. **Tab name** — If the tab is named something like "January 2026" or "Feb 2025", the year is extracted from the name.
-3. **UI year selection** — The year you selected in the Step 1 year navigator.
-4. **Current year** — Falls back to the current calendar year if none of the above provide a year.
+3. **Current year** — Falls back to the current calendar year if none of the above provide a year.
 
-This means your schedule will parse correctly as long as either the dates include the year, the tabs are named with the year, or you select the right year in the UI.
+This means your schedule will parse correctly as long as either the dates include the year or the tabs are named with the year.
 
 *Last updated: April 2, 2026*
