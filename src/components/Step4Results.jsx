@@ -54,7 +54,7 @@ export default function Step4Results({ results, onReset, onNewReport }) {
           <span className="notice-icon">⚠</span>
           <div>
             <strong>{overlapCount} overlap deduction{overlapCount !== 1 ? "s" : ""} applied.</strong>
-            <p>ER Eve shifts followed by Home Call had 1 hour deducted from both shifts to avoid double-counting. See the Overlap Log tab in your report.</p>
+            <p>When two back-to-back shifts overlap (for example, an ER eve running past midnight into a home call, or a day shift ending after an evening shift begins), the overlap hours are deducted from the <strong>second</strong> shift&apos;s invoiceable hours only. Physicians are still paid in full for every hour worked — the deduction only prevents double-billing the health authority. See the Overlap Log tab in your report for the specific shifts affected.</p>
           </div>
         </div>
       )}
