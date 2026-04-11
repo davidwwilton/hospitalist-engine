@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Generated documents (regenerate from .md source on demand)
+*.docx
