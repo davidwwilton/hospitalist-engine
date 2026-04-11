@@ -172,6 +172,40 @@ function extractCanonicalNames(rows) {
   return rows.slice(1).map(r=>(r[colIdx]||"").trim()).filter(v=>v&&!["TBA","NAME",""].includes(v.toUpperCase()));
 }
 
+// Diagnostic helper — when a tab parses to 0 entries, this function probes
+// the raw rows and returns a human-readable string describing what the parser
+// actually saw, so we can pinpoint the structural issue (missing header row,
+// wrong date format, etc.) without another debug round-trip.
+function diagnoseZeroEntries(rows, tabName) {
+  if (!rows || rows.length === 0) return "Tab has 0 rows.";
+
+  const header = rows[0] || [];
+  // Count shift columns the parser would detect
+  let shiftColCount = 0;
+  const shiftColHeaders = [];
+  for (let i = 2; i < header.length; i++) {
+    const raw = String(header[i] || "").trim();
+    if (!raw || SKIP_HEADERS.has(raw.toUpperCase())) continue;
+    const sid = headerToShiftId(raw);
+    if (sid) { shiftColCount++; shiftColHeaders.push(raw); }
+  }
+
+  // Scan every row's col-A value and see how many parse as dates
+  let dateRowCount = 0;
+  const sampleColA = [];
+  for (let r = 1; r < rows.length; r++) {
+    const cell = String(rows[r]?.[0] || "").trim();
+    if (r <= 10 && cell) sampleColA.push(`row${r + 1}="${cell}"`);
+    if (cell && parseDateStr(cell)) dateRowCount++;
+  }
+
+  // First shift-column data cell sample (from row 8 / index 7) to confirm physician names are present
+  const firstDataRow = rows[7] || [];
+  const firstPhysicianSample = firstDataRow.slice(2, 5).map(v => `"${String(v || "").trim()}"`).join(",");
+
+  return `Diagnostic: rows=${rows.length}, shift columns detected=${shiftColCount} (${shiftColHeaders.slice(0, 4).join(", ")}${shiftColHeaders.length > 4 ? "..." : ""}), rows with parseable date in col A=${dateRowCount}, col A samples=[${sampleColA.slice(0, 6).join(" ")}], row 8 shift cells=[${firstPhysicianSample}]`;
+}
+
 function parseTab(rows, sheetName, year) {
   if (!rows || rows.length < 2) return [];
   // Best year source: full date in first data row (row 8), then tab name, then argument
@@ -414,14 +448,16 @@ export default async function handler(req, res) {
           dataRows: rawRows.slice(7),     // row 8+ (index 7+)
         };
         // Flag tabs that returned zero entries — they were read but parseTab
-        // produced nothing, which almost always means a row-structure issue
+        // produced nothing, which almost always means a row-structure issue.
+        // Include a diagnostic probe so we don't have to guess what went wrong.
         if (addedCount === 0) {
+          const diag = diagnoseZeroEntries(rawRows, tab);
           tabErrors.push({
             tab,
-            error: `Tab was read successfully but no shift entries were extracted. Check that row 1 has column headers, rows 5-7 have regular/evening/overnight hours, and row 8+ has date rows with physician names.`,
+            error: `Tab was read successfully but no shift entries were extracted. ${diag}`,
             rowCount: rawRows.length,
           });
-          console.error(`Parse: tab "${tab}" returned 0 entries (rowCount=${rawRows.length})`);
+          console.error(`Parse: tab "${tab}" returned 0 entries (rowCount=${rawRows.length}) ${diag}`);
         }
       } catch (e) {
         // Surface the real error instead of swallowing it
