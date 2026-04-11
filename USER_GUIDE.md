@@ -214,6 +214,7 @@ If you only need the new shift in certain months, just add the column to those m
 | "Fewer than 5 entries parsed" | Either the schedule URL is wrong, no months were selected, or every selected month tab had a structural problem. Check the tab-specific error details included in the message. |
 | No shifts found in period | The date range doesn't overlap with any shifts in the parsed schedule — check that you parsed the right months |
 | Name shows as UNRESOLVED | The physician name in the schedule doesn't match anything in the Contact Info tab — correct it in Step 2 |
+| Physician worked UCC/Ward + Home Call on the same row — pay looks wrong | This is a hard-coded exception (see Appendix A8.1). The engine forces UCC/Ward to 15 regular + 5 evening hours and drops Home Call entirely so the physician is paid exactly 15 × base + 5 × evening bonus, and the HA is invoiced for 15 hours. Confirm it fired by checking the Duplicate Log tab for a row with `reason` containing "UCC/Ward + Home Call concurrent override". Note that the Clean — `<Month>` tab still shows the original schedule reference rows (including UCC/Ward's `9`), because the Clean tab mirrors the source. The Parsed Schedule tab is where you can verify the override applied — look for 15 Regular_Hrs / 5 Evening_Hrs on the UCC/Ward row for that date. |
 
 ---
 
@@ -337,6 +338,28 @@ Two cases are common:
 You'll always see every overlap that was detected logged in the **Overlap Log** tab of the financial output, with both shift IDs and the exact number of hours deducted. If the log is empty, no overlaps were found in the period.
 
 Edge case to be aware of: overlaps are only detected between **consecutive** shifts in the sorted list, not between arbitrary pairs. In practice this is never a problem because a physician's real shifts don't triple-stack, but if you ever see a value in the reports you can't reconcile, the Overlap Log is the first place to check.
+
+### A8.1. Hard-Coded Exception: UCC/Ward + Home Call Concurrent Override
+
+There is exactly one hard-coded override baked into the parser that deliberately breaks the normal "pay in full for every hour worked" rule. It fires in one specific rare scenario and nowhere else.
+
+**The scenario.** A single physician is scheduled to *both* the UCC/Ward column (shift time 17–08, overnight into the next morning) *and* the Home Call column (shift time 24–08, the overnight-only portion) on the same row of the schedule. This happens occasionally when the same person is asked to cover the ward from 17:00 through the entire night until 08:00 the next morning. In the schedule layout, Home Call 24–08 is listed as a separate column but it falls entirely inside the UCC/Ward 17–08 window — the physician is really working one continuous 15-hour shift, not two overlapping shifts.
+
+**Why a hard override is needed.** UCC/Ward is a special case where the paid hours in the reference row (row 5) don't match the actual clock hours of the shift. The sheet currently pays 9 regular hours + 5 evening hours for UCC/Ward in isolation, even though the shift spans 15 clock-hours from 17:00 to 08:00. That discrepancy is fine for the normal case, but when Home Call is also assigned to the same physician, the physician is actually working the full 15 hours and needs to be compensated for all of them — and we can't just keep both the UCC/Ward and Home Call reference values because that would over-pay.
+
+**What the override does.** When the parser detects the same physician appearing in both `UCC_WARD` and `HOME_CALL` columns on the same date, it:
+
+- Stamps the UCC/Ward entry with **regular_hrs = 15, evening_hrs = 5, overnight_hrs = 0** — replacing whatever the reference row says.
+- Marks the Home Call entry as suppressed. It gets logged in the Duplicate Log tab with the reason "UCC/Ward + Home Call concurrent override — physician paid 15h base + 5h evening only" and is removed from the Parsed Schedule entirely. The financial engine never sees it.
+- The Clean — Month tab will show the Home Call cell for that physician/date as blank. The UCC/Ward cell still shows the physician's name.
+
+**Worked example (March 17, Dr. Yu).** The schedule has Yu in column 19 (UCC/Ward, 17–08) and column 22 (Home Call, 24–08) on the same row. Without the override, Yu would be credited with 9 + 8 = 17 base hours plus whatever overnight bonus Home Call pays — an over-payment because Yu is really only working 15 clock-hours. With the override in place, Yu's UCC/Ward entry is stamped to `Regular_Hrs=15, Evening_Hrs=5, Overnight_Hrs=0`, the Home Call entry vanishes, and the financial report shows exactly **$3,126.50** gross pay (15 × $200.10 base + 5 × $25 evening) and **15** invoiceable hours billed to the health authority.
+
+**Important gotcha — the Clean tab won't reflect the override.** The Clean — Month tab is a faithful mirror of your original schedule layout, including the reference rows at the top. It will still show `9` in row 5 under the UCC/Ward column, even after the override fires. The Parsed Schedule tab (and everything downstream of it — Payroll Summary, HA Invoice, KPI Summary) will show the overridden values. If you ever need to verify what actually got paid, look at Parsed Schedule, not Clean.
+
+**How to tell if the override fired.** Check the Duplicate Log tab in the parsed output. Any row whose `reason` column mentions "UCC/Ward + Home Call concurrent override" is the override in action. You can cross-reference against the Parsed Schedule to confirm UCC/Ward shows 15/5/0 for that physician on that date.
+
+**When this override does NOT fire.** UCC/Ward worked in isolation → unchanged (still pays whatever the reference row says). Home Call worked in isolation → unchanged. UCC/Ward + some other shift (not Home Call) → unchanged. Home Call + some other shift (not UCC/Ward) → unchanged. Only the exact `UCC_WARD + HOME_CALL` pairing on the same physician/date triggers it. If in the future a new scenario needs similar treatment, it will require a code change in `api/parse.js` — search for `UCC_WARD_HOMECALL_OVERRIDE`.
 
 ### A9. Putting It All Together: The Per-Shift Pay Formula
 

@@ -301,9 +301,82 @@ function isDaytime(entry) {
     && entry.start_time >= 7 && entry.end_time <= 18 && entry.end_time > entry.start_time;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HARD-CODED EXCEPTION: UCC/Ward + Home Call concurrent override
+// ─────────────────────────────────────────────────────────────────────────────
+// Background: UCC/Ward is a 17:00–08:00 overnight shift (15 hours total). On
+// rare occasions a physician is also scheduled to Home Call (24:00–08:00, 8
+// overnight hours) on the same row in the schedule. Home Call in this case
+// lies entirely inside UCC/Ward's time range — the physician is only working
+// ONE continuous 15-hour shift, and Home Call is a duplicate tag for the
+// overnight portion.
+//
+// Under the standard "pay-in-full" rule, the physician would be paid for both
+// shifts (UCC/Ward's full reference row PLUS Home Call's 8 base + 8 overnight),
+// which over-counts actual hours worked. The business rule in this specific
+// concurrent scenario is: pay only for actual hours worked, which is 15 base
+// hours plus 5 evening premium hours — no overnight bonus, no Home Call pay.
+//
+// This override fires ONLY when a single physician has BOTH a UCC_WARD entry
+// AND a HOME_CALL entry on the same schedule row (same dateISO). When it fires:
+//   1. UCC/Ward's regular_hrs/evening_hrs/overnight_hrs are stamped to the
+//      override values (15/5/0) and payable/invoiceable mirror regular_hrs.
+//   2. Home Call is suppressed entirely (added to dupLog, blanked in Clean tab,
+//      absent from Parsed Schedule and financial report).
+//
+// If the schedule ever changes such that UCC/Ward's actual hours, evening
+// hours, or overnight bonus should differ, update the constants below. This
+// override is deliberately narrow — it does NOT affect UCC/Ward when worked
+// in isolation, and it does NOT affect any other shift combinations.
+// See USER_GUIDE.md Appendix A8 for the full rationale and worked example.
+const UCC_WARD_HOMECALL_OVERRIDE = {
+  regular_hrs: 15,
+  evening_hrs: 5,
+  overnight_hrs: 0,
+};
+
 function collapseDuplicates(entries) {
-  const seen = {}, kept = [], dupLog = [];
+  // ── Pass 1: UCC/Ward + Home Call concurrent override ───────────────────────
+  // Group entries by physician + dateISO. For any group that contains BOTH a
+  // UCC_WARD shift AND a HOME_CALL shift, stamp the override values onto the
+  // UCC/Ward entry and mark the Home Call entry for suppression.
+  const byKey = {};
   for (const e of entries) {
+    const key = `${e.physician}__${e.dateISO}`;
+    (byKey[key] = byKey[key] || []).push(e);
+  }
+  const suppressed = new Set();
+  const dupLog = [];
+  for (const group of Object.values(byKey)) {
+    if (group.length < 2) continue;
+    const ucc = group.find(e => e.shift_id === "UCC_WARD");
+    const hc  = group.find(e => e.shift_id === "HOME_CALL");
+    if (!ucc || !hc) continue;
+    // Apply the override to the UCC/Ward entry (mutates in place — these
+    // modified values flow through write-parsed.js to the Parsed Schedule tab
+    // and onward to the financial engine).
+    ucc.regular_hrs     = UCC_WARD_HOMECALL_OVERRIDE.regular_hrs;
+    ucc.evening_hrs     = UCC_WARD_HOMECALL_OVERRIDE.evening_hrs;
+    ucc.overnight_hrs   = UCC_WARD_HOMECALL_OVERRIDE.overnight_hrs;
+    ucc.payable_hrs     = UCC_WARD_HOMECALL_OVERRIDE.regular_hrs;
+    ucc.invoiceable_hrs = UCC_WARD_HOMECALL_OVERRIDE.regular_hrs;
+    // Suppress the Home Call entry
+    suppressed.add(hc);
+    dupLog.push({
+      physician: hc.physician,
+      date: hc.dateStr,
+      shift_retained: ucc.column_header,
+      shift_suppressed: hc.column_header,
+      retained_col_idx: ucc.col_idx,
+      suppressed_col_idx: hc.col_idx,
+      reason: `UCC/Ward + Home Call concurrent override — physician paid ${UCC_WARD_HOMECALL_OVERRIDE.regular_hrs}h base + ${UCC_WARD_HOMECALL_OVERRIDE.evening_hrs}h evening only`,
+    });
+  }
+
+  // ── Pass 2: existing daytime dedup ─────────────────────────────────────────
+  const seen = {}, kept = [];
+  for (const e of entries) {
+    if (suppressed.has(e)) continue;  // already suppressed by override
     if (!isDaytime(e)) { kept.push(e); continue; }
     const key = `${e.physician}__${e.dateISO}`;
     if (!(key in seen)) { seen[key] = { col_header: e.column_header, col_idx: e.col_idx }; kept.push(e); }
