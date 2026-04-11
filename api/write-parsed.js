@@ -169,12 +169,18 @@ export default async function handler(req, res) {
       // Also build a set of suppressed (duplicate) entries so we can blank those cells.
       // dupLog entries look like:
       //   { physician: <corrected name>, date: <raw dateStr e.g. "1-Feb">,
-      //     shift_retained: <col header>, shift_suppressed: <col header>, reason: ... }
-      // Key format: "<correctedName>__<rawDateStr>__<suppressedColHeader>"
+      //     shift_retained: <col header>, shift_suppressed: <col header>,
+      //     retained_col_idx: <num>, suppressed_col_idx: <num>, reason: ... }
+      // We key on COLUMN INDEX (not column header) because weekend pair-ward coverage
+      // can produce two columns with the SAME header (e.g. two "LB8A" columns). Keying
+      // on header alone would blank both the retained AND suppressed cells.
+      // Key format: "<correctedName>__<rawDateStr>__<suppressedColIdx>"
       const suppressedCells = new Set();
       if (dupLog) {
         for (const d of dupLog) {
-          suppressedCells.add(`${d.physician}__${d.date}__${d.shift_suppressed}`);
+          if (d.suppressed_col_idx != null) {
+            suppressedCells.add(`${d.physician}__${d.date}__${d.suppressed_col_idx}`);
+          }
         }
       }
 
@@ -220,8 +226,6 @@ export default async function handler(req, res) {
           }
 
           // Row 8+: data rows with corrected names AND duplicate suppression
-          // Pre-trim the header row once so we can look up column headers cheaply
-          const trimmedHeaders = headers.map(h => String(h || "").trim());
           for (const row of dataRows) {
             if (!row || !row.length) continue;
             const newRow = [...row];
@@ -233,9 +237,10 @@ export default async function handler(req, res) {
               if (!cellVal) continue;
               // Resolve to corrected name (falls back to raw if no mapping exists)
               const correctedName = nameMap[cellVal] || cellVal;
-              const colHeader = trimmedHeaders[c] || "";
-              // If this cell is a suppressed duplicate, blank it out
-              const suppressKey = `${correctedName}__${rowDateStr}__${colHeader}`;
+              // If this cell is a suppressed duplicate, blank it out.
+              // Key uses COLUMN INDEX (c) not column header, because weekend
+              // pair-ward coverage can produce duplicate column headers.
+              const suppressKey = `${correctedName}__${rowDateStr}__${c}`;
               if (suppressedCells.has(suppressKey)) {
                 newRow[c] = "";
                 continue;

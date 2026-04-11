@@ -225,12 +225,13 @@ function parseTab(rows, sheetName, year) {
     const dateObj = parseDateStr(dateStr, effectiveYear);
     if (!dateObj) continue;
     for (const [ci, [shiftId, colHeader]] of Object.entries(shiftCols)) {
-      const cell = String(row[parseInt(ci)]||"").trim();
+      const colIdx = parseInt(ci);
+      const cell = String(row[colIdx]||"").trim();
       if (!cell || ["TBA",""].includes(cell.toUpperCase())) continue;
       const meta = colMeta[ci] || {};
       entries.push({
         dateStr, dateObj, dateISO: dateISO(dateObj),
-        physician_raw: cell, shift_id: shiftId, column_header: colHeader, sheet: sheetName,
+        physician_raw: cell, shift_id: shiftId, column_header: colHeader, col_idx: colIdx, sheet: sheetName,
         start_time: meta.start, end_time: meta.end,
         regular_hrs: meta.regular_hrs, evening_hrs: meta.evening_hrs, overnight_hrs: meta.overnight_hrs,
         payable_hrs: meta.regular_hrs, invoiceable_hrs: meta.regular_hrs,
@@ -271,8 +272,16 @@ function collapseDuplicates(entries) {
   for (const e of entries) {
     if (!isDaytime(e)) { kept.push(e); continue; }
     const key = `${e.physician}__${e.dateISO}`;
-    if (!(key in seen)) { seen[key]=e.column_header; kept.push(e); }
-    else dupLog.push({ physician: e.physician, date: e.dateStr, shift_retained: seen[key], shift_suppressed: e.column_header, reason: "Same-day daytime overlap" });
+    if (!(key in seen)) { seen[key] = { col_header: e.column_header, col_idx: e.col_idx }; kept.push(e); }
+    else dupLog.push({
+      physician: e.physician,
+      date: e.dateStr,
+      shift_retained: seen[key].col_header,
+      shift_suppressed: e.column_header,
+      retained_col_idx: seen[key].col_idx,
+      suppressed_col_idx: e.col_idx,
+      reason: "Same-day daytime overlap",
+    });
   }
   return { entries: kept, dupLog };
 }
