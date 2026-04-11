@@ -389,22 +389,47 @@ export default async function handler(req, res) {
     // Parse month tabs — also capture original tab structure for Clean output
     let allEntries = [];
     const tabStructures = {};  // tabName → { headers, refRows, rows }
+    const tabErrors = [];      // per-tab errors so nothing fails silently
     for (const tab of monthTabs) {
       try {
         const safeTab = `'${tab.replace(/'/g, "''")}'`;
         const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: safeTab });
         const rawRows = resp.data.values || [];
+        const beforeCount = allEntries.length;
         allEntries.push(...parseTab(rawRows, tab, yearFromTabName(tab) || selectedYear));
+        const addedCount = allEntries.length - beforeCount;
         // Store the original tab structure for Clean tab reconstruction
         tabStructures[tab] = {
           headers: rawRows[0] || [],
           refRows: rawRows.slice(1, 7),  // rows 2-7 (indices 1-6)
           dataRows: rawRows.slice(7),     // row 8+ (index 7+)
         };
-      } catch { /* skip unreadable tabs */ }
+        // Flag tabs that returned zero entries — they were read but parseTab
+        // produced nothing, which almost always means a row-structure issue
+        if (addedCount === 0) {
+          tabErrors.push({
+            tab,
+            error: `Tab was read successfully but no shift entries were extracted. Check that row 1 has column headers, rows 5-7 have regular/evening/overnight hours, and row 8+ has date rows with physician names.`,
+            rowCount: rawRows.length,
+          });
+          console.error(`Parse: tab "${tab}" returned 0 entries (rowCount=${rawRows.length})`);
+        }
+      } catch (e) {
+        // Surface the real error instead of swallowing it
+        tabErrors.push({ tab, error: e.message });
+        console.error(`Parse: tab "${tab}" failed:`, e.message);
+      }
     }
 
-    if (allEntries.length < 5) return res.status(400).json({ error: "Fewer than 5 entries parsed. Check spreadsheet URL and tab names." });
+    if (allEntries.length < 5) {
+      const errDetail = tabErrors.length
+        ? " Tab errors: " + tabErrors.map(e => `"${e.tab}": ${e.error}`).join(" | ")
+        : "";
+      return res.status(400).json({
+        error: "Fewer than 5 entries parsed. Check spreadsheet URL and tab names." + errDetail,
+        tabErrors,
+      });
+    }
 
     // Tag weekend and stat holiday entries
     tagEntries(allEntries, statHolidays);
@@ -415,7 +440,7 @@ export default async function handler(req, res) {
     // Collapse duplicates
     const { entries, dupLog } = collapseDuplicates(normed);
 
-    res.status(200).json({ entries, canonicalNames, nameLog, dupLog, monthTabs, tabStructures, statHolidays: [...statHolidays] });
+    res.status(200).json({ entries, canonicalNames, nameLog, dupLog, monthTabs, tabStructures, statHolidays: [...statHolidays], tabErrors });
   } catch (e) {
     console.error("Parse error:", e);
     res.status(500).json({ error: e.message });
