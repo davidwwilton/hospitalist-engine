@@ -246,7 +246,8 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
         <div className="rates-note">
           <strong>How it works:</strong> Regular, evening, and overnight hours per shift are read from the schedule (rows 5–7).
           Evening/overnight bonus rates are added on top of the base rate. Back-to-back shifts with overlapping hours:
-          overlap is deducted from the second shift's invoiceable hours only (physicians are still paid in full).
+          overlap is deducted from the second shift&apos;s invoiceable hours only (physicians are still paid in full).
+          Holdback is calculated on <strong>base pay only</strong> — after-hours premiums and the stat holiday bonus are not subject to holdback.
         </div>
       </div>
 

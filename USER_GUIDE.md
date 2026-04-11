@@ -77,7 +77,7 @@ This step calculates compensation based on the parsed schedule.
    - Base Hourly Rate (default $200.10) — paid for all hours
    - Evening Bonus for 18:00–23:00 (default $25) — added on top of base rate for evening hours
    - Overnight Bonus for 23:00–08:00 (default $35) — added on top of base rate for overnight hours
-   - Overhead Holdback percentage (default 2%)
+   - Overhead Holdback percentage (default 2%) — applied to **base pay only**, not to after-hours premiums or the stat holiday bonus (see Appendix A11 for the exact formula)
 4. **Output Spreadsheet URL** — Paste the URL of the blank Google Sheet you created for financial output
 5. Click **Generate Report →**
 
@@ -376,14 +376,14 @@ After every shift has been priced, the engine sums each physician's shifts into 
 
 Per-physician totals are written to the **Payroll Summary** tab. The columns are: `Base_Pay`, `Eve_Bonus`, `ON_Bonus`, `Weekend_Bonus`, `After_Hours` (sum of the three premiums), `Base_Plus_After_Hrs`, `Stat_Bonus`, `Gross_Pay` (everything including stat), `Holdback`, and `Net_Pay`.
 
-The holdback is a flat percentage applied to gross pay:
+The holdback is a flat percentage applied to **base pay only** — not to after-hours bonuses and not to the stat holiday bonus. Premium pay (evening, overnight, weekend, and stat holiday) reaches the physician in full; only the regular-hours portion of compensation is subject to the holdback.
 
 ```
-holdback = gross × (holdback_pct / 100)
+holdback = base_pay × (holdback_pct / 100)
 net_pay  = gross − holdback
 ```
 
-Example: a physician with gross pay of $18,000 and a 2% holdback has `holdback = $18,000 × 0.02 = $360.00` and `net_pay = $18,000 − $360 = $17,640.00`.
+Example: a physician with `base_pay = $16,000`, `after_hours = $1,800`, `stat_bonus = $200` and a 2% holdback has `gross = $18,000`, `holdback = $16,000 × 0.02 = $320.00`, and `net_pay = $18,000 − $320 = $17,680.00`. Compare this to the older policy of holdback on gross, which would have produced a holdback of $360 and a net of $17,640 — the difference ($40 in this example) represents the holdback that is no longer taken from premium pay.
 
 The **KPI Summary** tab is a roll-up of all physicians combined — same line items, same math, just summed across the whole period.
 

@@ -198,7 +198,11 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
         overlap_deducted: ovDeduction,
       });
     }
-    const holdback = totGross * (holdbackPct/100), net = totGross - holdback;
+    // Holdback is calculated on BASE PAY only — not on after-hours bonuses
+    // (evening/overnight/weekend) and not on stat holiday bonus. This reflects
+    // the policy that premium pay should reach the physician in full, and only
+    // the regular-hours portion of compensation is subject to holdback.
+    const holdback = totBasePay * (holdbackPct/100), net = totGross - holdback;
     physicianResults[phys] = {
       physician: phys, shift_count: shifts.length,
       payable_hrs: totPayable, invoiceable_hrs: totInvoiceable,
