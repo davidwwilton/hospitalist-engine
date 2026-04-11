@@ -84,8 +84,8 @@ This step calculates compensation based on the parsed schedule.
 **How hours and pay work:**
 - The number of regular, evening, and overnight hours per shift type are read from the schedule itself (rows 5–7 of each month tab). This means you can adjust hours dynamically by editing the schedule — no code changes needed.
 - Evening and overnight bonus rates are **added on top of** the base rate. For example, an evening hour pays $150 + $25 = $175.
-- **Weekend bonus:** All regular hours worked on Saturday or Sunday receive the evening bonus rate on top of base rate. This is included in the After Hours total.
-- **Stat holiday bonus:** All hours worked on a stat holiday receive an additional 0.5 × base hourly rate. Stat holidays also receive the weekend bonus (evening rate on regular hours). The stat holiday bonus is tracked as its own category in all reports — it is **not** included in the After Hours total.
+- **Weekend bonus:** Regular hours worked on Saturday or Sunday receive the evening bonus rate on top of base rate — but **only for pure daytime shifts** (shifts with zero evening hours and zero overnight hours). Evening and overnight shifts on a weekend continue to earn their normal evening/overnight after-hours bonus and do **not** also receive the weekend premium. The weekend bonus is included in the After Hours total.
+- **Stat holiday bonus:** All hours worked on a stat holiday receive an additional 0.5 × base hourly rate. Stat holidays also receive the weekend bonus on the same daytime-only basis as above (pure daytime stat shifts get the evening rate on regular hours; evening/overnight stat shifts do not). The stat holiday bonus itself (the 0.5 × base piece) is tracked as its own category in all reports — it is **not** included in the After Hours total.
 - **Overlap detection** handles two cases: (1) same-day overlaps, where a daytime shift ends after the next shift starts (e.g. 08–17 followed by 16–01 on the same day = 1 hour overlap), and (2) cross-midnight overlaps, where an evening shift runs past midnight into a next-day shift (e.g. ER EVE 16–01 on Day 1 followed by HOME CALL 00–08 on Day 2 = 1 hour overlap). In both cases the overlapping hours are deducted from the **second** shift's invoiceable hours only. Physicians are still paid in full for all hours worked — the deduction only prevents double-invoicing the health authority.
 
 ### Parsed Output Tabs
@@ -103,10 +103,10 @@ After parsing completes (Step 1 + Step 2), the parsed output spreadsheet will co
 
 You'll see KPI summary cards showing totals for the period, plus a link to open the financial report spreadsheet. The report contains these tabs:
 
-- **KPI Summary** — Period parameters and aggregate totals (base pay, after hours bonus, stat holiday bonus, gross pay, holdback, net pay)
-- **Payroll Summary** — Per-physician compensation breakdown including separate columns for Base Pay, After Hours, Stat Bonus, Gross Pay, Holdback, and Net Pay
-- **HA Invoice** — Health authority invoiceable hours and amounts, with a separate Stat Bonus column
-- **Physician Detail** — Every shift for every physician with hour and pay breakdowns
+- **KPI Summary** — Period parameters and aggregate totals. Each premium is broken out on its own line: Total Base Pay, Total Evening Bonus Pay, Total Overnight Bonus Pay, Total Weekend Bonus Pay, Total After Hours Pay (the sum of those three premiums), Total Base + After Hours (base pay plus the after-hours total, excluding stat), Total Stat Holiday Bonus, Total Gross Pay, Total Holdback, and Total Net Payout.
+- **Payroll Summary** — Per-physician compensation broken out into separate columns: Base_Pay, Eve_Bonus, ON_Bonus, Weekend_Bonus, After_Hours (sum of the three premiums), Base_Plus_After_Hrs (Base_Pay + After_Hours, excludes stat), Stat_Bonus, Gross_Pay (everything including stat), Holdback, and Net_Pay.
+- **HA Invoice** — Health authority invoice with the same premium breakdown as Payroll Summary: Invoiceable_Hrs, Base_Pay, Eve_Bonus, ON_Bonus, Weekend_Bonus, After_Hours, Base_Plus_After_Hrs, Stat_Bonus, and Invoice_Amount (the grand total billed to the HA).
+- **Physician Detail** — Every shift for every physician with the full hour and pay breakdown. Money columns read left-to-right as: Base_Pay → Eve_Bonus → ON_Bonus → Weekend_Bonus → After_Hours → Base_Plus_After_Hrs → Stat_Bonus → Gross, so you can follow exactly how a single shift's pay was built up.
 - **Overlap Log** — Back-to-back shifts with overlapping hours, showing which shift had invoiceable hours deducted
 
 Click **Open Report ↗** to view the spreadsheet in Google Sheets.

@@ -129,7 +129,7 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
     const { invoiceDeductions, overlapLog } = detectOverlaps(sorted);
     allOverlapLog.push(...overlapLog);
 
-    let totPayable=0, totInvoiceable=0, totReg=0, totEve=0, totOn=0, totGross=0, totBasePay=0, totAfterHours=0, totWkndBonus=0, totStatBonus=0;
+    let totPayable=0, totInvoiceable=0, totReg=0, totEve=0, totOn=0, totGross=0, totBasePay=0, totAfterHours=0, totEveBonus=0, totOnBonus=0, totWkndBonus=0, totStatBonus=0, totBasePlusAfter=0;
     const shiftDetails=[];
     for (const shift of sorted) {
       // Row 5 = total shift hours (paid at base rate) = payable/invoiceable hours
@@ -154,19 +154,26 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
       const eveBonus = eveHrs * eveningRate;
       const onBonus  = onHrs  * overnightRate;
 
-      // Weekend bonus: regular hours on Sat/Sun/stat get evening bonus rate added
-      const weekendBonus = (isWeekend || isStatHoliday) ? regHrs * eveningRate : 0;
+      // Weekend bonus: applies ONLY to pure daytime shifts on Sat/Sun/stat.
+      // If a shift has any evening or overnight hours, it already earns an
+      // after-hours bonus (eveBonus / onBonus), so no weekend premium is added.
+      const isDaytimeShift = eveHrs === 0 && onHrs === 0;
+      const weekendBonus = ((isWeekend || isStatHoliday) && isDaytimeShift) ? regHrs * eveningRate : 0;
 
       // Stat holiday bonus: 0.5 × baseRate on all shift hours
       const statBonus = isStatHoliday ? regHrs * (0.5 * baseRate) : 0;
 
       // After hours = evening + overnight + weekend bonuses (stat bonus tracked separately)
       const afterHours = eveBonus + onBonus + weekendBonus;
-      const gross = basePay + afterHours + statBonus;
+      // Base + after hours = physician base pay plus all premium bonuses, EXCLUDING stat holiday bonus
+      const basePlusAfter = basePay + afterHours;
+      const gross = basePlusAfter + statBonus;
 
       totPayable += payableHrs; totInvoiceable += invoiceableHrs;
       totReg += regHrs; totEve += eveHrs; totOn += onHrs;
       totBasePay += basePay; totAfterHours += afterHours;
+      totEveBonus += eveBonus; totOnBonus += onBonus;
+      totBasePlusAfter += basePlusAfter;
       totGross += gross; totWkndBonus += weekendBonus; totStatBonus += statBonus;
 
       shiftDetails.push({
@@ -177,7 +184,7 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
         regular_hrs: regHrs, evening_hrs: eveHrs, overnight_hrs: onHrs,
         base_pay: basePay, eve_bonus: eveBonus, on_bonus: onBonus,
         weekend_bonus: weekendBonus, stat_bonus: statBonus,
-        after_hours: afterHours, gross,
+        after_hours: afterHours, base_plus_after_hours: basePlusAfter, gross,
         overlap_deducted: ovDeduction,
       });
     }
@@ -186,8 +193,10 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
       physician: phys, shift_count: shifts.length,
       payable_hrs: totPayable, invoiceable_hrs: totInvoiceable,
       regular_hrs: totReg, evening_hrs: totEve, overnight_hrs: totOn,
-      base_pay: totBasePay, after_hours: totAfterHours,
-      weekend_bonus: totWkndBonus, stat_bonus: totStatBonus,
+      base_pay: totBasePay,
+      eve_bonus: totEveBonus, on_bonus: totOnBonus, weekend_bonus: totWkndBonus,
+      after_hours: totAfterHours, base_plus_after_hours: totBasePlusAfter,
+      stat_bonus: totStatBonus,
       gross: totGross, holdback, net, shift_details: shiftDetails,
     };
   }
@@ -201,8 +210,11 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
     total_payable_hrs: vals.reduce((s,p)=>s+p.payable_hrs,0),
     total_invoiceable_hrs: vals.reduce((s,p)=>s+p.invoiceable_hrs,0),
     total_base_pay: vals.reduce((s,p)=>s+p.base_pay,0),
-    total_after_hours: vals.reduce((s,p)=>s+p.after_hours,0),
+    total_eve_bonus: vals.reduce((s,p)=>s+p.eve_bonus,0),
+    total_on_bonus: vals.reduce((s,p)=>s+p.on_bonus,0),
     total_weekend_bonus: vals.reduce((s,p)=>s+p.weekend_bonus,0),
+    total_after_hours: vals.reduce((s,p)=>s+p.after_hours,0),
+    total_base_plus_after_hours: vals.reduce((s,p)=>s+p.base_plus_after_hours,0),
     total_stat_bonus: vals.reduce((s,p)=>s+p.stat_bonus,0),
     total_gross: vals.reduce((s,p)=>s+p.gross,0),
     total_holdback: vals.reduce((s,p)=>s+p.holdback,0),
@@ -303,8 +315,11 @@ export default async function handler(req, res) {
       {KPI:"Total Invoiceable Hours",Value:fh(kpi.total_invoiceable_hrs)},
       {KPI:"---",Value:""},
       {KPI:"Total Base Pay",Value:fm(kpi.total_base_pay)},
+      {KPI:"Total Evening Bonus Pay",Value:fm(kpi.total_eve_bonus)},
+      {KPI:"Total Overnight Bonus Pay",Value:fm(kpi.total_on_bonus)},
+      {KPI:"Total Weekend Bonus Pay",Value:fm(kpi.total_weekend_bonus)},
       {KPI:"Total After Hours Pay",Value:fm(kpi.total_after_hours)},
-      {KPI:"  (incl. Weekend Bonus)",Value:fm(kpi.total_weekend_bonus)},
+      {KPI:"Total Base + After Hours",Value:fm(kpi.total_base_plus_after_hours)},
       {KPI:"Total Stat Holiday Bonus",Value:fm(kpi.total_stat_bonus)},
       {KPI:"Total Gross Pay",Value:fm(kpi.total_gross)},
       {KPI:"Total Holdback",Value:fm(kpi.total_holdback)},
@@ -312,20 +327,20 @@ export default async function handler(req, res) {
     ]);
 
     // Payroll Summary
-    const payRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Shift_Count:p.shift_count, Payable_Hrs:fh(p.payable_hrs), Invoiceable_Hrs:fh(p.invoiceable_hrs), Evening_Bonus_Hrs:fh(p.evening_hrs), Overnight_Bonus_Hrs:fh(p.overnight_hrs), Base_Pay:fm(p.base_pay), After_Hours:fm(p.after_hours), Stat_Bonus:fm(p.stat_bonus), Gross_Pay:fm(p.gross), Holdback:fm(p.holdback), Net_Pay:fm(p.net) }));
-    await writeSheet(sheets, outputSheetId, "Payroll Summary", ["Physician","Shift_Count","Payable_Hrs","Invoiceable_Hrs","Evening_Bonus_Hrs","Overnight_Bonus_Hrs","Base_Pay","After_Hours","Stat_Bonus","Gross_Pay","Holdback","Net_Pay"], payRows);
+    const payRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Shift_Count:p.shift_count, Payable_Hrs:fh(p.payable_hrs), Invoiceable_Hrs:fh(p.invoiceable_hrs), Evening_Bonus_Hrs:fh(p.evening_hrs), Overnight_Bonus_Hrs:fh(p.overnight_hrs), Base_Pay:fm(p.base_pay), Eve_Bonus:fm(p.eve_bonus), ON_Bonus:fm(p.on_bonus), Weekend_Bonus:fm(p.weekend_bonus), After_Hours:fm(p.after_hours), Base_Plus_After_Hrs:fm(p.base_plus_after_hours), Stat_Bonus:fm(p.stat_bonus), Gross_Pay:fm(p.gross), Holdback:fm(p.holdback), Net_Pay:fm(p.net) }));
+    await writeSheet(sheets, outputSheetId, "Payroll Summary", ["Physician","Shift_Count","Payable_Hrs","Invoiceable_Hrs","Evening_Bonus_Hrs","Overnight_Bonus_Hrs","Base_Pay","Eve_Bonus","ON_Bonus","Weekend_Bonus","After_Hours","Base_Plus_After_Hrs","Stat_Bonus","Gross_Pay","Holdback","Net_Pay"], payRows);
 
     // HA Invoice
-    const invRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Invoiceable_Hrs:fh(p.invoiceable_hrs), Base_Pay:fm(p.base_pay), After_Hours:fm(p.after_hours), Stat_Bonus:fm(p.stat_bonus), Invoice_Amount:fm(p.gross) }));
-    await writeSheet(sheets, outputSheetId, "HA Invoice", ["Physician","Invoiceable_Hrs","Base_Pay","After_Hours","Stat_Bonus","Invoice_Amount"], invRows);
+    const invRows = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician)).map(p=>({ Physician:p.physician, Invoiceable_Hrs:fh(p.invoiceable_hrs), Base_Pay:fm(p.base_pay), Eve_Bonus:fm(p.eve_bonus), ON_Bonus:fm(p.on_bonus), Weekend_Bonus:fm(p.weekend_bonus), After_Hours:fm(p.after_hours), Base_Plus_After_Hrs:fm(p.base_plus_after_hours), Stat_Bonus:fm(p.stat_bonus), Invoice_Amount:fm(p.gross) }));
+    await writeSheet(sheets, outputSheetId, "HA Invoice", ["Physician","Invoiceable_Hrs","Base_Pay","Eve_Bonus","ON_Bonus","Weekend_Bonus","After_Hours","Base_Plus_After_Hrs","Stat_Bonus","Invoice_Amount"], invRows);
 
     // Physician Detail
     const detRows = [];
     for (const phys of Object.keys(physicianResults).sort()) {
       const p=physicianResults[phys];
-      for (const sd of p.shift_details) detRows.push({ Physician:p.physician, Date:sd.date, Shift:sd.shift, Column:sd.column_header, Weekend:sd.is_weekend?"Y":"", Stat_Holiday:sd.is_stat_holiday?"Y":"", Payable_Hrs:fh(sd.payable_hrs), Invoiceable_Hrs:fh(sd.invoiceable_hrs), Eve_Bonus_Hrs:fh(sd.evening_hrs), ON_Bonus_Hrs:fh(sd.overnight_hrs), Base_Pay:fm(sd.base_pay), Eve_Bonus:fm(sd.eve_bonus), ON_Bonus:fm(sd.on_bonus), Weekend_Bonus:fm(sd.weekend_bonus), Stat_Bonus:fm(sd.stat_bonus), After_Hours:fm(sd.after_hours), Gross:fm(sd.gross), Overlap_Deducted:fh(sd.overlap_deducted) });
+      for (const sd of p.shift_details) detRows.push({ Physician:p.physician, Date:sd.date, Shift:sd.shift, Column:sd.column_header, Weekend:sd.is_weekend?"Y":"", Stat_Holiday:sd.is_stat_holiday?"Y":"", Payable_Hrs:fh(sd.payable_hrs), Invoiceable_Hrs:fh(sd.invoiceable_hrs), Eve_Bonus_Hrs:fh(sd.evening_hrs), ON_Bonus_Hrs:fh(sd.overnight_hrs), Base_Pay:fm(sd.base_pay), Eve_Bonus:fm(sd.eve_bonus), ON_Bonus:fm(sd.on_bonus), Weekend_Bonus:fm(sd.weekend_bonus), After_Hours:fm(sd.after_hours), Base_Plus_After_Hrs:fm(sd.base_plus_after_hours), Stat_Bonus:fm(sd.stat_bonus), Gross:fm(sd.gross), Overlap_Deducted:fh(sd.overlap_deducted) });
     }
-    await writeSheet(sheets, outputSheetId, "Physician Detail", ["Physician","Date","Shift","Column","Weekend","Stat_Holiday","Payable_Hrs","Invoiceable_Hrs","Eve_Bonus_Hrs","ON_Bonus_Hrs","Base_Pay","Eve_Bonus","ON_Bonus","Weekend_Bonus","Stat_Bonus","After_Hours","Gross","Overlap_Deducted"], detRows);
+    await writeSheet(sheets, outputSheetId, "Physician Detail", ["Physician","Date","Shift","Column","Weekend","Stat_Holiday","Payable_Hrs","Invoiceable_Hrs","Eve_Bonus_Hrs","ON_Bonus_Hrs","Base_Pay","Eve_Bonus","ON_Bonus","Weekend_Bonus","After_Hours","Base_Plus_After_Hrs","Stat_Bonus","Gross","Overlap_Deducted"], detRows);
 
     // Overlap Log
     if (overlapLog.length) await writeSheet(sheets, outputSheetId, "Overlap Log", ["physician","date_a","shift_a","date_b","shift_b","overlap_hours"], overlapLog);
