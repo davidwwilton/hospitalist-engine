@@ -131,6 +131,28 @@ The source schedule spreadsheet must follow this row structure in each month tab
 
 **Time format:** Use 2-digit hours separated by a dash, e.g. `08 - 17`. For shifts crossing midnight, use the next-day hour: `16 - 01` means 4pm to 1am. Use `24` for midnight: `24 - 08` means midnight to 8am.
 
+### Keep Every Month Tab Consistent — Use a Template
+
+**This is the single most important rule for a smooth parse.** The parser reads the reference rows (shift times, regular hours, evening hours, overnight hours) from **hardcoded row positions** — row 4, row 5, row 6, and row 7. It does not search for them by label. If a month tab has an extra row inserted at the top, a missing reference row, or a shifted column layout, the parser will either produce wrong hours or return zero entries for that tab entirely.
+
+**Recommended workflow for creating a new month tab:**
+
+1. Create a tab in your source schedule called **"Template"** (or duplicate an existing month that you know parses correctly).
+2. Make sure the Template tab has the exact row structure described in the table above — header in row 1, time range in row 4, regular/evening/overnight hours in rows 5–7, and the first date row in row 8. Rows 2, 3 can contain display-only info (notes, sub-headers) but must not shift the other rows.
+3. When a new month starts, **right-click the Template tab → Duplicate**, rename the copy to the month name (e.g. "March 2026"), then fill in the date column and physician names. Do not add, remove, or reorder rows 1–7.
+4. If you need to add a new shift type, add the column following the "Adding a New Shift Type" section below — this is safe because it doesn't change the row structure.
+
+**What happens if you don't follow this:** You'll get a parse error like "Tab was read successfully but no shift entries were extracted" or, worse, a silently wrong financial report where shift hours don't match reality. We hit this exact issue in April 2026 when the February tab had an extra "Shift Hours" row inserted between row 2 and row 3, pushing everything down by one and breaking the parser. Fixing it required copying the first 8 rows from January over February's top rows. Avoid the headache — use a template.
+
+**Quick self-check before running a parse on a new month:**
+
+- Row 1 — does it have shift column headers starting from column C (after Date and Day)?
+- Row 4 — does it have time ranges like `08 - 17` under each shift column?
+- Rows 5, 6, 7 — do they have single-digit hour values (`9`, `5`, `0`, etc.) under each shift column?
+- Row 8 — is this the first date row (e.g. `1-Mar`, `Mon`, then physician names)?
+
+If any of those are off, fix them before parsing.
+
 ### Stat Holidays Tab
 
 Add a tab called **"Stat Holidays"** to your source schedule spreadsheet. List one date per row in column A using the format **"Month Day"**, for example:
@@ -188,6 +210,8 @@ If you only need the new shift in certain months, just add the column to those m
 | "The caller does not have permission" | Share the spreadsheet with the service account email as Editor |
 | Parse button is greyed out | Make sure you've entered a source URL, selected at least one month, and entered an output URL |
 | Generate Report button is greyed out | Make sure you've entered both a parsed schedule URL and an output URL |
+| "Tab was read successfully but no shift entries were extracted" | The month tab's row layout doesn't match the template. Rows 1–7 must be: header, (row 2–3 any content), time range, regular hours, evening hours, overnight hours. Most common cause: an extra row inserted at the top of the month. See "Keep Every Month Tab Consistent" above. |
+| "Fewer than 5 entries parsed" | Either the schedule URL is wrong, no months were selected, or every selected month tab had a structural problem. Check the tab-specific error details included in the message. |
 | No shifts found in period | The date range doesn't overlap with any shifts in the parsed schedule — check that you parsed the right months |
 | Name shows as UNRESOLVED | The physician name in the schedule doesn't match anything in the Contact Info tab — correct it in Step 2 |
 
@@ -203,4 +227,4 @@ The parser determines which year to assign to dates (like "1-Mar" that have no y
 
 This means your schedule will parse correctly as long as either the dates include the year or the tabs are named with the year.
 
-*Last updated: April 2, 2026*
+*Last updated: April 11, 2026*
