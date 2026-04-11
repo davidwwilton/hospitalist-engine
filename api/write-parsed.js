@@ -166,12 +166,14 @@ export default async function handler(req, res) {
         entryLookup[rawKey] = e.physician;
       }
 
-      // Also build a set of suppressed (duplicate) entries so we can blank those cells
+      // Also build a set of suppressed (duplicate) entries so we can blank those cells.
+      // dupLog entries look like:
+      //   { physician: <corrected name>, date: <raw dateStr e.g. "1-Feb">,
+      //     shift_retained: <col header>, shift_suppressed: <col header>, reason: ... }
+      // Key format: "<correctedName>__<rawDateStr>__<suppressedColHeader>"
       const suppressedCells = new Set();
       if (dupLog) {
         for (const d of dupLog) {
-          // dupLog has: physician, date, shift_retained, shift_suppressed
-          // We want to blank the suppressed shift cell
           suppressedCells.add(`${d.physician}__${d.date}__${d.shift_suppressed}`);
         }
       }
@@ -217,16 +219,28 @@ export default async function handler(req, res) {
             gridValues.push(new Array(headers.length).fill(""));
           }
 
-          // Row 8+: data rows with corrected names
+          // Row 8+: data rows with corrected names AND duplicate suppression
+          // Pre-trim the header row once so we can look up column headers cheaply
+          const trimmedHeaders = headers.map(h => String(h || "").trim());
           for (const row of dataRows) {
             if (!row || !row.length) continue;
             const newRow = [...row];
+            const rowDateStr = String(newRow[0] || "").trim();
             // Columns 0 and 1 are Date and Day — leave as-is
-            // Columns 2+ are shift columns — apply name corrections
+            // Columns 2+ are shift columns — apply name corrections and blank suppressed dupes
             for (let c = 2; c < newRow.length; c++) {
               const cellVal = String(newRow[c] || "").trim();
               if (!cellVal) continue;
-              // Apply name correction if this raw name has a mapping
+              // Resolve to corrected name (falls back to raw if no mapping exists)
+              const correctedName = nameMap[cellVal] || cellVal;
+              const colHeader = trimmedHeaders[c] || "";
+              // If this cell is a suppressed duplicate, blank it out
+              const suppressKey = `${correctedName}__${rowDateStr}__${colHeader}`;
+              if (suppressedCells.has(suppressKey)) {
+                newRow[c] = "";
+                continue;
+              }
+              // Otherwise apply the name correction if one exists
               if (nameMap[cellVal]) {
                 newRow[c] = nameMap[cellVal];
               }
