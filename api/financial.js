@@ -119,10 +119,20 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
 
   const physicianResults={}, allOverlapLog=[];
   for (const [phys, shifts] of Object.entries(byPhysician)) {
-    // Sort by date then by shift start time (from parsed schedule)
+    // Sort by date then by shift start time.
+    // IMPORTANT: use Start_Ext24 (extended-24 convention) for the tiebreaker, not
+    // Start_Hr. Start_Hr is a clock-time string ("00:00", "17:00") with % 24 applied,
+    // so an overnight shift whose true start is hour 24 (midnight-of-next-day) wraps
+    // to "00:00" and gets sorted BEFORE a same-date day shift — which flips the
+    // order the overlap detector expects and produces phantom 24-hour overlaps.
+    // Extended-24 keeps the real chronological order (8 < 17 < 24 < 32).
+    const startSortKey = (r) => {
+      if (r.Start_Ext24 != null && r.Start_Ext24 !== "") return parseFloat(r.Start_Ext24);
+      return parseFloat(r.Start_Hr) || 0;
+    };
     const sorted = [...shifts].sort((a,b) => {
       if (a.Date_ISO!==b.Date_ISO) return a.Date_ISO<b.Date_ISO?-1:1;
-      return (parseFloat(a.Start_Hr)||0) - (parseFloat(b.Start_Hr)||0);
+      return startSortKey(a) - startSortKey(b);
     });
 
     // Detect overlapping back-to-back shifts — deduction applies to invoiceable hours only
