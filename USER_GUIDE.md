@@ -214,7 +214,7 @@ If you only need the new shift in certain months, just add the column to those m
 | "Fewer than 5 entries parsed" | Either the schedule URL is wrong, no months were selected, or every selected month tab had a structural problem. Check the tab-specific error details included in the message. |
 | No shifts found in period | The date range doesn't overlap with any shifts in the parsed schedule — check that you parsed the right months |
 | Name shows as UNRESOLVED | The physician name in the schedule doesn't match anything in the Contact Info tab — correct it in Step 2 |
-| Physician worked UCC/Ward + Home Call on the same row — pay looks wrong | This is a hard-coded exception (see Appendix A8.1). The engine forces UCC/Ward to 15 regular + 5 evening hours and drops Home Call entirely so the physician is paid exactly 15 × base + 5 × evening bonus, and the HA is invoiced for 15 hours. Confirm it fired by checking the Duplicate Log tab for a row with `reason` containing "UCC/Ward + Home Call concurrent override". Note that the Clean — `<Month>` tab still shows the original schedule reference rows (including UCC/Ward's `9`), because the Clean tab mirrors the source. The Parsed Schedule tab is where you can verify the override applied — look for 15 Regular_Hrs / 5 Evening_Hrs on the UCC/Ward row for that date. |
+| Physician worked UCC/Ward + Home Call on the same row — pay looks wrong | This is a hard-coded exception (see Appendix A8.1). The engine forces UCC/Ward to 15 regular + 5 evening hours and drops Home Call from the Parsed Schedule / financial engine. On the Clean — `<Month>` tab the Home Call cell is **kept with the physician's name and highlighted light green** so the concurrent scenario is visible at a glance. Confirm the override fired by: (1) the green cell on the Clean tab, (2) a row in the Duplicate Log with `is_concurrent_override = true`, and (3) 15 Regular_Hrs / 5 Evening_Hrs on the UCC/Ward row in Parsed Schedule (which will also be highlighted green). Note the Clean tab still shows the original schedule reference rows (including UCC/Ward's `9` in row 5) — those are copied verbatim from the source. |
 
 ---
 
@@ -349,17 +349,37 @@ There is exactly one hard-coded override baked into the parser that deliberately
 
 **What the override does.** When the parser detects the same physician appearing in both `UCC_WARD` and `HOME_CALL` columns on the same date, it:
 
-- Stamps the UCC/Ward entry with **regular_hrs = 15, evening_hrs = 5, overnight_hrs = 0** — replacing whatever the reference row says.
-- Marks the Home Call entry as suppressed. It gets logged in the Duplicate Log tab with the reason "UCC/Ward + Home Call concurrent override — physician paid 15h base + 5h evening only" and is removed from the Parsed Schedule entirely. The financial engine never sees it.
-- The Clean — Month tab will show the Home Call cell for that physician/date as blank. The UCC/Ward cell still shows the physician's name.
+- Stamps the UCC/Ward entry with **regular_hrs = 15, evening_hrs = 5, overnight_hrs = 0** — replacing whatever the reference row says. In the Parsed Schedule tab the resulting row is highlighted **light green**.
+- Marks the Home Call entry as suppressed so the financial engine never sees it. It is removed from the Parsed Schedule tab and logged in the Duplicate Log tab with `is_concurrent_override = true` and the reason "UCC/Ward + Home Call concurrent override — physician paid 15h base + 5h evening only".
+- On the Clean — Month tab, the Home Call cell for that physician/date is **kept with the physician's name visible and highlighted light green**. This is a deliberate change from earlier versions that blanked the cell. The concurrent scenario is now self-evident at a glance when reviewing the Clean tab.
 
-**Worked example (March 17, Dr. Yu).** The schedule has Yu in column 19 (UCC/Ward, 17–08) and column 22 (Home Call, 24–08) on the same row. Without the override, Yu would be credited with 9 + 8 = 17 base hours plus whatever overnight bonus Home Call pays — an over-payment because Yu is really only working 15 clock-hours. With the override in place, Yu's UCC/Ward entry is stamped to `Regular_Hrs=15, Evening_Hrs=5, Overnight_Hrs=0`, the Home Call entry vanishes, and the financial report shows exactly **$3,126.50** gross pay (15 × $200.10 base + 5 × $25 evening) and **15** invoiceable hours billed to the health authority.
+**Worked example (March 17, Dr. Yu).** The schedule has Yu in column 19 (UCC/Ward, 17–08) and column 22 (Home Call, 24–08) on the same row. Without the override, Yu would be credited with 9 + 8 = 17 base hours plus whatever overnight bonus Home Call pays — an over-payment because Yu is really only working 15 clock-hours. With the override in place, Yu's UCC/Ward entry is stamped to `Regular_Hrs=15, Evening_Hrs=5, Overnight_Hrs=0` (green row in Parsed Schedule), the Home Call entry is removed from Parsed Schedule but Yu's name is retained in the Home Call cell on the Clean — March tab with a green background, and the financial report shows exactly **$3,126.50** gross pay (15 × $200.10 base + 5 × $25 evening) and **15** invoiceable hours billed to the health authority.
 
-**Important gotcha — the Clean tab won't reflect the override.** The Clean — Month tab is a faithful mirror of your original schedule layout, including the reference rows at the top. It will still show `9` in row 5 under the UCC/Ward column, even after the override fires. The Parsed Schedule tab (and everything downstream of it — Payroll Summary, HA Invoice, KPI Summary) will show the overridden values. If you ever need to verify what actually got paid, look at Parsed Schedule, not Clean.
+**Important gotcha — the Clean tab reference rows are unchanged.** The Clean — Month tab is a faithful mirror of your original schedule layout, including the reference rows at the top. It will still show `9` in row 5 under the UCC/Ward column, even after the override fires. Only the *data cells* for the physician(s) affected get the green highlight. The Parsed Schedule tab (and everything downstream of it — Payroll Summary, HA Invoice, KPI Summary) reflects the overridden values. If you ever need to verify what actually got paid, look at Parsed Schedule, not the Clean tab reference rows.
 
-**How to tell if the override fired.** Check the Duplicate Log tab in the parsed output. Any row whose `reason` column mentions "UCC/Ward + Home Call concurrent override" is the override in action. You can cross-reference against the Parsed Schedule to confirm UCC/Ward shows 15/5/0 for that physician on that date.
+**How to tell if the override fired.** Three independent signals:
+
+1. The Clean — Month tab has a **light green cell** containing the physician's name in the Home Call column (and another green cell in the UCC/Ward column for the same physician/date).
+2. The Parsed Schedule tab has a **light green row** for that physician on that date with UCC/Ward showing 15/5/0.
+3. The Duplicate Log tab has a row with `is_concurrent_override = true` for that physician/date.
+
+See also the **Legend** tab in the parsed output for a quick reference to the three highlight colours used (green, orange, purple).
 
 **When this override does NOT fire.** UCC/Ward worked in isolation → unchanged (still pays whatever the reference row says). Home Call worked in isolation → unchanged. UCC/Ward + some other shift (not Home Call) → unchanged. Home Call + some other shift (not UCC/Ward) → unchanged. Only the exact `UCC_WARD + HOME_CALL` pairing on the same physician/date triggers it. If in the future a new scenario needs similar treatment, it will require a code change in `api/parse.js` — search for `UCC_WARD_HOMECALL_OVERRIDE`.
+
+### A8.2. Highlight Colour Scheme (Clean Tab + Parsed Schedule)
+
+The parsed output spreadsheet uses three background colours to flag shifts that need human attention or that have been handled by a non-standard rule. The same three colours appear on the Clean — `<Month>` tabs (per-cell) and the Parsed Schedule tab (per-row). A **Legend** tab is written at the end of every parsed output with coloured swatches for quick reference.
+
+| Colour | Meaning | Where it appears | What to do |
+|--------|---------|------------------|------------|
+| **Light green** | Concurrent override — UCC/Ward + Home Call on the same physician/date. Hours forced to 15 regular + 5 evening (see A8.1). | Clean tab: UCC/Ward *and* Home Call cells for that physician/date. Parsed Schedule: the UCC/Ward row (the Home Call row is removed). | Nothing — the override is automatic. The colour is an audit marker. |
+| **Orange** | Back-to-back overlap — the second of two consecutive shifts whose times overlap. Invoiceable hours on the second shift are auto-reduced; the physician is still paid in full. | Clean tab: the cell for the *second* (later) shift. Parsed Schedule: the second shift's row. | Nothing — the deduction is automatic. Cross-reference the **Back to Back Shifts** tab for the numeric detail. |
+| **Purple** | Stat holiday shift — the shift falls on a statutory holiday as defined in the source schedule's Stat Holidays tab. | Clean tab: every data cell on that date. Parsed Schedule: every row on that date. | Nothing — stat bonus is applied by the financial engine. The colour confirms the date was recognised as a stat holiday. |
+
+**Priority when a cell qualifies for more than one.** A concurrent-override cell wins over a back-to-back overlap, which wins over a stat holiday. In practice overlaps between these are rare, but the rule keeps each cell a single clean colour rather than a muddy blend.
+
+**Re-running the parser clears old highlights.** Before painting new colours, `write-parsed.js` resets the used range on each tab to a white background, so you never see ghost colours from a previous run. This is cosmetic only — it does not affect any values.
 
 ### A9. Putting It All Together: The Per-Shift Pay Formula
 

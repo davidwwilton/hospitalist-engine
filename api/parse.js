@@ -360,6 +360,9 @@ function collapseDuplicates(entries) {
     ucc.overnight_hrs   = UCC_WARD_HOMECALL_OVERRIDE.overnight_hrs;
     ucc.payable_hrs     = UCC_WARD_HOMECALL_OVERRIDE.regular_hrs;
     ucc.invoiceable_hrs = UCC_WARD_HOMECALL_OVERRIDE.regular_hrs;
+    // Flag the UCC/Ward entry so downstream (Parsed Schedule highlighting)
+    // can mark it as a concurrent-override row.
+    ucc.concurrent_override = true;
     // Suppress the Home Call entry
     suppressed.add(hc);
     dupLog.push({
@@ -369,6 +372,14 @@ function collapseDuplicates(entries) {
       shift_suppressed: hc.column_header,
       retained_col_idx: ucc.col_idx,
       suppressed_col_idx: hc.col_idx,
+      // Explicit flag so write-parsed.js can distinguish this from the
+      // standard weekend-daytime dedup (those still blank the cell; this
+      // one keeps the name and gets a light-green background instead).
+      is_concurrent_override: true,
+      // Preserve the raw name and dateISO for downstream highlighting, since
+      // the Clean-tab name map uses physician_raw → corrected name lookup.
+      physician_raw: hc.physician_raw,
+      dateISO: hc.dateISO,
       reason: `UCC/Ward + Home Call concurrent override — physician paid ${UCC_WARD_HOMECALL_OVERRIDE.regular_hrs}h base + ${UCC_WARD_HOMECALL_OVERRIDE.evening_hrs}h evening only`,
     });
   }
