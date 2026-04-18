@@ -228,18 +228,31 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             </div>
           </div>
           <div className="form-group">
-            <label>Overhead Holdback</label>
-            <div className="input-suffix">
+            <label>Cost Share (per hour)</label>
+            <div className="input-prefix">
+              <span>$</span>
               <input
                 type="number"
                 className="form-input"
-                value={config.holdbackPct}
+                value={config.costSharePerHour}
                 min={0}
-                max={100}
-                step={0.1}
-                onChange={(e) => update("holdbackPct", parseFloat(e.target.value))}
+                step={0.01}
+                onChange={(e) => update("costSharePerHour", parseFloat(e.target.value))}
               />
-              <span>%</span>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Operational Holdback (per hour)</label>
+            <div className="input-prefix">
+              <span>$</span>
+              <input
+                type="number"
+                className="form-input"
+                value={config.opHoldbackPerHour}
+                min={0}
+                step={0.01}
+                onChange={(e) => update("opHoldbackPerHour", parseFloat(e.target.value))}
+              />
             </div>
           </div>
         </div>
@@ -247,7 +260,7 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
           <strong>How it works:</strong> Regular, evening, and overnight hours per shift are read from the schedule (rows 5–7).
           Evening/overnight bonus rates are added on top of the base rate. Back-to-back shifts with overlapping hours:
           overlap is deducted from the second shift&apos;s invoiceable hours only (physicians are still paid in full).
-          Holdback is calculated on <strong>base pay only</strong> — after-hours premiums and the stat holiday bonus are not subject to holdback.
+          Cost Share and Operational Holdback are both calculated as <strong>$/hour × regular (payable) hours</strong>. After-hours premium pay and stat holiday bonuses are not subject to either deduction.
         </div>
       </div>
 

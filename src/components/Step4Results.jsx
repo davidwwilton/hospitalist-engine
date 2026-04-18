@@ -43,6 +43,14 @@ export default function Step4Results({ results, onReset, onNewReport }) {
           <span className="kpi-value">{fmtHrs(kpi.total_overnight_hrs)}</span>
         </div>
         <div className="kpi-card">
+          <span className="kpi-label">Total Cost Share</span>
+          <span className="kpi-value">{fmtMoney(kpi.total_cost_share)}</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Total Op Holdback</span>
+          <span className="kpi-value">{fmtMoney(kpi.total_op_holdback)}</span>
+        </div>
+        <div className="kpi-card">
           <span className="kpi-label">Total Holdback</span>
           <span className="kpi-value">{fmtMoney(kpi.total_holdback)}</span>
         </div>
@@ -68,7 +76,9 @@ export default function Step4Results({ results, onReset, onNewReport }) {
             <span>Shifts</span>
             <span>Payable Hrs</span>
             <span>Gross Pay</span>
-            <span>Holdback</span>
+            <span>Cost Share</span>
+            <span>Op Holdback</span>
+            <span>Total Holdback</span>
             <span>Net Pay</span>
           </div>
           {Object.values(physicianResults)
@@ -79,7 +89,9 @@ export default function Step4Results({ results, onReset, onNewReport }) {
                 <span>{pr.shift_count}</span>
                 <span>{fmtHrs(pr.payable_hrs)}</span>
                 <span>{fmtMoney(pr.gross)}</span>
-                <span className="holdback">{fmtMoney(pr.holdback)}</span>
+                <span className="holdback">{fmtMoney(pr.cost_share)}</span>
+                <span className="holdback">{fmtMoney(pr.op_holdback)}</span>
+                <span className="holdback">{fmtMoney(pr.total_holdback)}</span>
                 <span className="net">{fmtMoney(pr.net)}</span>
               </div>
             ))}
