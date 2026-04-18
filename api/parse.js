@@ -11,8 +11,8 @@ import { google } from "googleapis";
 // Row 0 = column headers (shift names)
 // Row 3 = start/end times per shift column (e.g. "08 - 17", "16 - 01")
 // Row 4 = regular hours to pay per shift column
-// Row 5 = evening bonus hours to pay per shift column
-// Row 6 = overnight bonus hours to pay per shift column
+// Row 5 = evening premium hours to pay per shift column
+// Row 6 = overnight premium hours to pay per shift column
 const REF_ROW_TIMES   = 3;
 const REF_ROW_REGULAR = 4;
 const REF_ROW_EVENING = 5;
@@ -315,7 +315,7 @@ function isDaytime(entry) {
 // shifts (UCC/Ward's full reference row PLUS Home Call's 8 base + 8 overnight),
 // which over-counts actual hours worked. The business rule in this specific
 // concurrent scenario is: pay only for actual hours worked, which is 15 base
-// hours plus 4 evening premium hours — no overnight bonus, no Home Call pay.
+// hours plus 4 evening premium hours — no overnight premium, no Home Call pay.
 //
 // This override fires ONLY when a single physician has BOTH a UCC_WARD entry
 // AND a HOME_CALL entry on the same schedule row (same dateISO). When it fires:
@@ -325,7 +325,7 @@ function isDaytime(entry) {
 //      absent from Parsed Schedule and financial report).
 //
 // If the schedule ever changes such that UCC/Ward's actual hours, evening
-// hours, or overnight bonus should differ, update the constants below. This
+// hours, or overnight premium should differ, update the constants below. This
 // override is deliberately narrow — it does NOT affect UCC/Ward when worked
 // in isolation, and it does NOT affect any other shift combinations.
 // See USER_GUIDE.md Appendix A8 for the full rationale and worked example.

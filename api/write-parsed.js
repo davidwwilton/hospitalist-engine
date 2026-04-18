@@ -467,7 +467,7 @@ export default async function handler(req, res) {
           Colour: "", // purple
           Meaning: "Stat holiday shift",
           "Where it appears": "Clean — Month tab cell; Parsed Schedule row",
-          Notes: "Shift falls on a statutory holiday. Stat bonus handled by the financial engine.",
+          Notes: "Shift falls on a statutory holiday. Stat premium handled by the financial engine.",
         },
       ];
       const legendSheetId = await writeSheet(sheets, spreadsheetId, "Legend", legendHeaders, legendRows);

@@ -200,7 +200,7 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             </div>
           </div>
           <div className="form-group">
-            <label>Evening Bonus (18:00–23:00)</label>
+            <label>Evening Premium (18:00–23:00)</label>
             <div className="input-prefix">
               <span>$</span>
               <input
@@ -214,7 +214,7 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             </div>
           </div>
           <div className="form-group">
-            <label>Overnight Bonus (23:00–08:00)</label>
+            <label>Overnight Premium (23:00–08:00)</label>
             <div className="input-prefix">
               <span>$</span>
               <input
@@ -258,9 +258,9 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
         </div>
         <div className="rates-note">
           <strong>How it works:</strong> Regular, evening, and overnight hours per shift are read from the schedule (rows 5–7).
-          Evening/overnight bonus rates are added on top of the base rate. Back-to-back shifts with overlapping hours:
+          Evening/overnight premium rates are added on top of the base rate. Back-to-back shifts with overlapping hours:
           overlap is deducted from the second shift&apos;s invoiceable hours only (physicians are still paid in full).
-          Cost Share and Operational Holdback are both calculated as <strong>$/hour × regular (payable) hours</strong>. After-hours premium pay and stat holiday bonuses are not subject to either deduction.
+          Cost Share and Operational Holdback are both calculated as <strong>$/hour × regular (payable) hours</strong>. After-hours premium pay and stat holiday premiums are not subject to either deduction.
         </div>
       </div>
 

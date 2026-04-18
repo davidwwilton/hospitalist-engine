@@ -239,9 +239,9 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
     const net = totGross - totTotalHoldback;
 
     // Interim and After Hours views. The practice pays physicians on two cadences:
-    //   Interim (biweekly)  = base pay + stat bonus − holdback  (paid by practice)
+    //   Interim (biweekly)  = base pay + stat premium − holdback  (paid by practice)
     //   After Hours (quarterly) = eve + overnight + weekend day premium  (lump sum)
-    // Stat bonus is NOT invoiced to the HA — it is internally redistributed from
+    // Stat premium is NOT invoiced to the HA — it is internally redistributed from
     // the holdback pool. So the HA invoice = base pay + after hours, split into
     // two tabs by cadence. ha_interim_invoice uses invoiceable (overlap-adjusted)
     // base pay so back-to-back overlap isn't double-billed to the HA.
@@ -393,44 +393,44 @@ export default async function handler(req, res) {
       {KPI:"---",Value:""},
       {KPI:"— Rates —",Value:""},
       {KPI:"Base Rate",Value:fm(rates.base)},
-      {KPI:"Evening Bonus Rate",Value:fm(rates.eve)},
-      {KPI:"Overnight Bonus Rate",Value:fm(rates.on)},
+      {KPI:"Evening Premium Rate",Value:fm(rates.eve)},
+      {KPI:"Overnight Premium Rate",Value:fm(rates.on)},
       {KPI:"Cost Share Rate",Value:`${fm(rates.costShare)}/hr`},
       {KPI:"Op Holdback Rate",Value:`${fm(rates.opHoldback)}/hr`},
       {KPI:"---",Value:""},
       {KPI:"— Hour Counts —",Value:""},
       {KPI:"Physician Count",Value:String(kpi.physician_count)},
       {KPI:"Total Regular Hours",Value:fh(kpi.total_regular_hrs)},
-      {KPI:"Total Evening Hours",Value:fh(kpi.total_evening_hrs)},
-      {KPI:"Total Overnight Hours",Value:fh(kpi.total_overnight_hrs)},
-      {KPI:"Total Weekend Day Hours",Value:fh(kpi.total_weekend_day_hrs)},
+      {KPI:"Total Evening Premium Hours",Value:fh(kpi.total_evening_hrs)},
+      {KPI:"Total Overnight Premium Hours",Value:fh(kpi.total_overnight_hrs)},
+      {KPI:"Total Weekend Day Premium Hours",Value:fh(kpi.total_weekend_day_hrs)},
       {KPI:"Total Payable Hours",Value:fh(kpi.total_payable_hrs)},
       {KPI:"Total Invoiceable Hours",Value:fh(kpi.total_invoiceable_hrs)},
       {KPI:"---",Value:""},
       {KPI:"— Pay Components —",Value:""},
       {KPI:"Total Base Pay",Value:fm(kpi.total_base_pay)},
-      {KPI:"Total Evening Bonus Pay",Value:fm(kpi.total_eve_bonus)},
-      {KPI:"Total Overnight Bonus Pay",Value:fm(kpi.total_on_bonus)},
+      {KPI:"Total Evening Premium Pay",Value:fm(kpi.total_eve_bonus)},
+      {KPI:"Total Overnight Premium Pay",Value:fm(kpi.total_on_bonus)},
       {KPI:"Total Weekend Day Premium",Value:fm(kpi.total_weekend_bonus)},
       {KPI:"Total After Hours Pay",Value:fm(kpi.total_after_hours)},
-      {KPI:"Total Stat Holiday Bonus",Value:fm(kpi.total_stat_bonus)},
+      {KPI:"Total Stat Holiday Premium",Value:fm(kpi.total_stat_bonus)},
       {KPI:"Total Gross Pay",Value:fm(kpi.total_gross)},
       {KPI:"---",Value:""},
-      {KPI:"— Interim Payroll (Biweekly) —",Value:""},
-      {KPI:"Total Interim Gross (Base + Stat)",Value:fm(kpi.total_interim_gross)},
+      {KPI:"— Interim Payroll —",Value:""},
+      {KPI:"Total Interim Gross (Base + Stat Premium)",Value:fm(kpi.total_interim_gross)},
       {KPI:"Total Cost Share",Value:fm(kpi.total_cost_share)},
       {KPI:"Total Op Holdback",Value:fm(kpi.total_op_holdback)},
       {KPI:"Total Holdback",Value:fm(kpi.total_holdback)},
       {KPI:"Total Interim Net",Value:fm(kpi.total_interim_net)},
       {KPI:"---",Value:""},
-      {KPI:"— After Hours Payroll (Quarterly) —",Value:""},
+      {KPI:"— After Hours Payroll —",Value:""},
       {KPI:"Total After Hours Payout",Value:fm(kpi.total_after_hours_pay)},
       {KPI:"---",Value:""},
-      {KPI:"— HA Invoice (excludes Stat Bonus) —",Value:""},
+      {KPI:"— HA Invoice (excludes Stat Premium) —",Value:""},
       {KPI:"HA Invoice – Interim (Base only)",Value:fm(kpi.total_ha_interim_invoice)},
       {KPI:"HA Invoice – After Hours",Value:fm(kpi.total_ha_after_hours_invoice)},
       {KPI:"HA Invoice – Total",Value:fm(kpi.total_ha_total_invoice)},
-      {KPI:"Stat Bonus (funded internally, not invoiced to HA)",Value:fm(kpi.total_stat_bonus)},
+      {KPI:"Stat Premium (funded internally, not invoiced to HA)",Value:fm(kpi.total_stat_bonus)},
       {KPI:"---",Value:""},
       {KPI:"— Physician Net Payout —",Value:""},
       {KPI:"Total Net Payout (Interim Net + After Hours)",Value:fm(kpi.total_net)},
@@ -443,19 +443,19 @@ export default async function handler(req, res) {
     const sortedPhys = Object.values(physicianResults).sort((a,b)=>a.physician.localeCompare(b.physician));
 
     // Interim Payroll — biweekly pay run. Pays physicians for base hours + stat
-    // bonus less the two holdbacks. After-hours premiums are NOT in this tab.
+    // premium less the two holdbacks. After-hours premiums are NOT in this tab.
     const interimRows = sortedPhys.map(p=>({
       Physician:p.physician,
       "8h_Shifts":String(p.shifts_8h), "9h_Shifts":String(p.shifts_9h), Other_Shifts:String(p.shifts_other),
       Regular_Hrs:fh(p.regular_hrs),
-      Base_Pay:fm(p.base_pay), Stat_Bonus:fm(p.stat_bonus), Interim_Gross:fm(p.interim_gross),
+      Base_Pay:fm(p.base_pay), Stat_Premium:fm(p.stat_bonus), Interim_Gross:fm(p.interim_gross),
       Cost_Share:fm(p.cost_share), Op_Holdback:fm(p.op_holdback), Total_Holdback:fm(p.total_holdback),
       Interim_Net:fm(p.interim_net),
     }));
     await writeSheet(sheets, outputSheetId, "Interim Payroll",
-      ["Physician","8h_Shifts","9h_Shifts","Other_Shifts","Regular_Hrs","Base_Pay","Stat_Bonus","Interim_Gross","Cost_Share","Op_Holdback","Total_Holdback","Interim_Net"], interimRows);
+      ["Physician","8h_Shifts","9h_Shifts","Other_Shifts","Regular_Hrs","Base_Pay","Stat_Premium","Interim_Gross","Cost_Share","Op_Holdback","Total_Holdback","Interim_Net"], interimRows);
 
-    // HA Invoice – Interim — base pay only, overlap-adjusted. Excludes stat bonus
+    // HA Invoice – Interim — base pay only, overlap-adjusted. Excludes stat premium
     // (internally redistributed from holdback pool, not billable to the HA).
     const haInterimRows = sortedPhys.map(p=>({
       Physician:p.physician,
@@ -490,16 +490,16 @@ export default async function handler(req, res) {
     // Payroll Summary — comprehensive per-physician view with every pay component
     // in one place. Kept as the audit/reference tab; the new Interim Payroll and
     // After Hours Payroll tabs are the cleaner day-to-day views.
-    const payRows = sortedPhys.map(p=>({ Physician:p.physician, Shift_Count:p.shift_count, Payable_Hrs:fh(p.payable_hrs), Invoiceable_Hrs:fh(p.invoiceable_hrs), Evening_Bonus_Hrs:fh(p.evening_hrs), Overnight_Bonus_Hrs:fh(p.overnight_hrs), Base_Pay:fm(p.base_pay), Eve_Bonus:fm(p.eve_bonus), ON_Bonus:fm(p.on_bonus), Weekend_Bonus:fm(p.weekend_bonus), After_Hours:fm(p.after_hours), Base_Plus_After_Hrs:fm(p.base_plus_after_hours), Stat_Bonus:fm(p.stat_bonus), Gross_Pay:fm(p.gross), Cost_Share:fm(p.cost_share), Op_Holdback:fm(p.op_holdback), Total_Holdback:fm(p.total_holdback), Net_Pay:fm(p.net) }));
-    await writeSheet(sheets, outputSheetId, "Payroll Summary", ["Physician","Shift_Count","Payable_Hrs","Invoiceable_Hrs","Evening_Bonus_Hrs","Overnight_Bonus_Hrs","Base_Pay","Eve_Bonus","ON_Bonus","Weekend_Bonus","After_Hours","Base_Plus_After_Hrs","Stat_Bonus","Gross_Pay","Cost_Share","Op_Holdback","Total_Holdback","Net_Pay"], payRows);
+    const payRows = sortedPhys.map(p=>({ Physician:p.physician, Shift_Count:p.shift_count, Payable_Hrs:fh(p.payable_hrs), Invoiceable_Hrs:fh(p.invoiceable_hrs), Evening_Premium_Hrs:fh(p.evening_hrs), Overnight_Premium_Hrs:fh(p.overnight_hrs), Base_Pay:fm(p.base_pay), Eve_Premium:fm(p.eve_bonus), ON_Premium:fm(p.on_bonus), Weekend_Day_Premium:fm(p.weekend_bonus), After_Hours:fm(p.after_hours), Base_Plus_After_Hrs:fm(p.base_plus_after_hours), Stat_Premium:fm(p.stat_bonus), Gross_Pay:fm(p.gross), Cost_Share:fm(p.cost_share), Op_Holdback:fm(p.op_holdback), Total_Holdback:fm(p.total_holdback), Net_Pay:fm(p.net) }));
+    await writeSheet(sheets, outputSheetId, "Payroll Summary", ["Physician","Shift_Count","Payable_Hrs","Invoiceable_Hrs","Evening_Premium_Hrs","Overnight_Premium_Hrs","Base_Pay","Eve_Premium","ON_Premium","Weekend_Day_Premium","After_Hours","Base_Plus_After_Hrs","Stat_Premium","Gross_Pay","Cost_Share","Op_Holdback","Total_Holdback","Net_Pay"], payRows);
 
     // Physician Detail
     const detRows = [];
     for (const phys of Object.keys(physicianResults).sort()) {
       const p=physicianResults[phys];
-      for (const sd of p.shift_details) detRows.push({ Physician:p.physician, Date:sd.date, Shift:sd.shift, Column:sd.column_header, Weekend:sd.is_weekend?"Y":"", Stat_Holiday:sd.is_stat_holiday?"Y":"", Payable_Hrs:fh(sd.payable_hrs), Invoiceable_Hrs:fh(sd.invoiceable_hrs), Eve_Bonus_Hrs:fh(sd.evening_hrs), ON_Bonus_Hrs:fh(sd.overnight_hrs), Base_Pay:fm(sd.base_pay), Eve_Bonus:fm(sd.eve_bonus), ON_Bonus:fm(sd.on_bonus), Weekend_Bonus:fm(sd.weekend_bonus), After_Hours:fm(sd.after_hours), Base_Plus_After_Hrs:fm(sd.base_plus_after_hours), Stat_Bonus:fm(sd.stat_bonus), Gross:fm(sd.gross), Cost_Share:fm(sd.cost_share), Op_Holdback:fm(sd.op_holdback), Total_Holdback:fm(sd.total_holdback), Overlap_Deducted:fh(sd.overlap_deducted) });
+      for (const sd of p.shift_details) detRows.push({ Physician:p.physician, Date:sd.date, Shift:sd.shift, Column:sd.column_header, Weekend:sd.is_weekend?"Y":"", Stat_Holiday:sd.is_stat_holiday?"Y":"", Payable_Hrs:fh(sd.payable_hrs), Invoiceable_Hrs:fh(sd.invoiceable_hrs), Eve_Premium_Hrs:fh(sd.evening_hrs), ON_Premium_Hrs:fh(sd.overnight_hrs), Base_Pay:fm(sd.base_pay), Eve_Premium:fm(sd.eve_bonus), ON_Premium:fm(sd.on_bonus), Weekend_Day_Premium:fm(sd.weekend_bonus), After_Hours:fm(sd.after_hours), Base_Plus_After_Hrs:fm(sd.base_plus_after_hours), Stat_Premium:fm(sd.stat_bonus), Gross:fm(sd.gross), Cost_Share:fm(sd.cost_share), Op_Holdback:fm(sd.op_holdback), Total_Holdback:fm(sd.total_holdback), Overlap_Deducted:fh(sd.overlap_deducted) });
     }
-    await writeSheet(sheets, outputSheetId, "Physician Detail", ["Physician","Date","Shift","Column","Weekend","Stat_Holiday","Payable_Hrs","Invoiceable_Hrs","Eve_Bonus_Hrs","ON_Bonus_Hrs","Base_Pay","Eve_Bonus","ON_Bonus","Weekend_Bonus","After_Hours","Base_Plus_After_Hrs","Stat_Bonus","Gross","Cost_Share","Op_Holdback","Total_Holdback","Overlap_Deducted"], detRows);
+    await writeSheet(sheets, outputSheetId, "Physician Detail", ["Physician","Date","Shift","Column","Weekend","Stat_Holiday","Payable_Hrs","Invoiceable_Hrs","Eve_Premium_Hrs","ON_Premium_Hrs","Base_Pay","Eve_Premium","ON_Premium","Weekend_Day_Premium","After_Hours","Base_Plus_After_Hrs","Stat_Premium","Gross","Cost_Share","Op_Holdback","Total_Holdback","Overlap_Deducted"], detRows);
 
     // Overlap Log
     if (overlapLog.length) await writeSheet(sheets, outputSheetId, "Overlap Log", ["physician","date_a","shift_a","date_b","shift_b","overlap_hours"], overlapLog);

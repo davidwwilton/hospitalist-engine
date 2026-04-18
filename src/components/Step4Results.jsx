@@ -35,11 +35,11 @@ export default function Step4Results({ results, onReset, onNewReport }) {
           <span className="kpi-value">{fmtHrs(kpi.total_regular_hrs)}</span>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Evening Hours</span>
+          <span className="kpi-label">Evening Premium Hours</span>
           <span className="kpi-value">{fmtHrs(kpi.total_evening_hrs)}</span>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Overnight Hours</span>
+          <span className="kpi-label">Overnight Premium Hours</span>
           <span className="kpi-value">{fmtHrs(kpi.total_overnight_hrs)}</span>
         </div>
         <div className="kpi-card">
