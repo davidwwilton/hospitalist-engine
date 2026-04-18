@@ -874,7 +874,7 @@ html, body, #root {
 
 .phys-table-header {
   display: grid;
-  grid-template-columns: 2fr 60px 100px 110px 110px 110px 110px 110px;
+  grid-template-columns: 2fr 60px 100px 110px 110px 110px 110px;
   background: var(--bg-card2);
   padding: 10px 16px;
   font-size: 11px;
@@ -887,7 +887,7 @@ html, body, #root {
 
 .phys-table-row {
   display: grid;
-  grid-template-columns: 2fr 60px 100px 110px 110px 110px 110px 110px;
+  grid-template-columns: 2fr 60px 100px 110px 110px 110px 110px;
   padding: 11px 16px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
@@ -1038,11 +1038,9 @@ html, body, #root {
   .phys-table-header span:nth-child(4),
   .phys-table-header span:nth-child(5),
   .phys-table-header span:nth-child(6),
-  .phys-table-header span:nth-child(7),
   .phys-table-row span:nth-child(4),
   .phys-table-row span:nth-child(5),
-  .phys-table-row span:nth-child(6),
-  .phys-table-row span:nth-child(7) { display: none; }
+  .phys-table-row span:nth-child(6) { display: none; }
   .step-label { display: none; }
   .radio-group.horizontal { flex-direction: column; }
   .name-review-header, .name-review-row {

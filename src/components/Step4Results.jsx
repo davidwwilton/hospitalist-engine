@@ -75,10 +75,9 @@ export default function Step4Results({ results, onReset, onNewReport }) {
             <span>Physician</span>
             <span>Shifts</span>
             <span>Payable Hrs</span>
+            <span>Stat Pay</span>
             <span>Gross Pay</span>
-            <span>Cost Share</span>
-            <span>Op Holdback</span>
-            <span>Total Holdback</span>
+            <span>Holdback</span>
             <span>Net Pay</span>
           </div>
           {Object.values(physicianResults)
@@ -88,9 +87,8 @@ export default function Step4Results({ results, onReset, onNewReport }) {
                 <span className="phys-name">{pr.physician}</span>
                 <span>{pr.shift_count}</span>
                 <span>{fmtHrs(pr.payable_hrs)}</span>
+                <span>{fmtMoney(pr.stat_bonus)}</span>
                 <span>{fmtMoney(pr.gross)}</span>
-                <span className="holdback">{fmtMoney(pr.cost_share)}</span>
-                <span className="holdback">{fmtMoney(pr.op_holdback)}</span>
                 <span className="holdback">{fmtMoney(pr.total_holdback)}</span>
                 <span className="net">{fmtMoney(pr.net)}</span>
               </div>
