@@ -1,8 +1,61 @@
 export default function Step4Results({ results, onReset, onNewReport }) {
-  const { kpi, periodLabel, overlapCount, physicianCount, outputUrl, physicianResults } = results;
+  const { kpi, periodLabel, periodStart, periodEnd, overlapCount, physicianCount, outputUrl, physicianResults } = results;
 
   const fmtMoney = (n) => `$${Number(n).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtHrs = (n) => Number(n).toFixed(2);
+
+  // Escape a single CSV field per RFC 4180: wrap in quotes if the value contains
+  // a comma, double-quote, or newline; double any embedded quotes.
+  const csvEscape = (val) => {
+    const s = String(val ?? "");
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  // Build the QuickBooks-bound CSV for the accountant. This represents the
+  // INTERIM (biweekly) pay run only — base pay + stat premium, less holdback.
+  // Premiums (evening / overnight / weekend day) are paid quarterly from a
+  // separate lump-sum flow and are NOT in this file.
+  const buildQBCsv = () => {
+    const headers = [
+      "Physician","Pay Period","Period Start Date","Period End Date",
+      "8h Shifts","9h Shifts","Other Shifts","Payable Hours",
+      "Base Pay","Stat Pay","Gross Pay","Total Holdback","Net Pay",
+    ];
+    const rows = Object.values(physicianResults)
+      .sort((a,b) => a.physician.localeCompare(b.physician))
+      .map(pr => [
+        pr.physician,
+        periodLabel,
+        periodStart || "",
+        periodEnd   || "",
+        pr.shifts_8h,
+        pr.shifts_9h,
+        pr.shifts_other,
+        Number(pr.payable_hrs).toFixed(2),
+        Number(pr.base_pay).toFixed(2),
+        Number(pr.stat_bonus).toFixed(2),
+        Number(pr.interim_gross).toFixed(2),
+        Number(pr.total_holdback).toFixed(2),
+        Number(pr.interim_net).toFixed(2),
+      ]);
+    const lines = [headers, ...rows].map(r => r.map(csvEscape).join(","));
+    return lines.join("\r\n");
+  };
+
+  const downloadQBCsv = () => {
+    const csv = buildQBCsv();
+    // Prepend UTF-8 BOM so Excel correctly renders accented physician names.
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const fname = `VHA Hospitalist Payroll ${periodStart || "start"} to ${periodEnd || "end"}.csv`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="step-panel">
@@ -101,13 +154,18 @@ export default function Step4Results({ results, onReset, onNewReport }) {
         <div className="output-link-info">
           <span className="sheets-icon">📊</span>
           <div>
-            <strong>Your report is ready in Google Sheets</strong>
-            <p>Includes: KPI Summary · Payroll Summary · HA Invoice · Physician Detail{overlapCount > 0 ? " · Overlap Log" : ""}</p>
+            <strong>Your report is ready</strong>
+            <p>Spreadsheet includes: KPI Summary · Interim Payroll · After Hours Payroll · HA Invoices · Payroll Summary · Physician Detail{overlapCount > 0 ? " · Overlap Log" : ""}</p>
           </div>
         </div>
-        <a href={outputUrl} target="_blank" rel="noreferrer" className="btn-primary">
-          Open Report ↗
-        </a>
+        <div className="output-link-actions">
+          <button type="button" onClick={downloadQBCsv} className="btn-secondary">
+            Download QuickBooks CSV ↓
+          </button>
+          <a href={outputUrl} target="_blank" rel="noreferrer" className="btn-primary">
+            Open Report ↗
+          </a>
+        </div>
       </div>
 
       <div className="step-actions">

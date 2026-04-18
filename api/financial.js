@@ -506,7 +506,14 @@ export default async function handler(req, res) {
 
     const finalUrl = `https://docs.google.com/spreadsheets/d/${outputSheetId}`;
 
-    res.status(200).json({ kpi, physicianResults, overlapCount:overlapLog.length, periodLabel, outputUrl:finalUrl });
+    res.status(200).json({
+      kpi, physicianResults,
+      overlapCount: overlapLog.length,
+      periodLabel,
+      periodStart: dateISO(periodStart),
+      periodEnd:   dateISO(periodEnd),
+      outputUrl: finalUrl,
+    });
 
   } catch (e) {
     console.error("Financial error:", e);

@@ -939,6 +939,12 @@ html, body, #root {
   margin-top: 2px;
 }
 
+.output-link-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 /* ── BUTTONS ─────────────────────────────────────────────────────────────────── */
 .step-actions {
   display: flex;
