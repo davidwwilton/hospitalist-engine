@@ -75,17 +75,18 @@ This step calculates compensation based on the parsed schedule.
    - **Custom Range** — Enter a from/to date (e.g. "1-Mar" to "14-Mar")
 3. **Financial Parameters** — Set your rates:
    - Base Hourly Rate (default $200.10) — paid for all hours
-   - Evening Bonus for 18:00–23:00 (default $25) — added on top of base rate for evening hours
-   - Overnight Bonus for 23:00–08:00 (default $35) — added on top of base rate for overnight hours
-   - Overhead Holdback percentage (default 2%) — applied to **base pay only**, not to after-hours premiums or the stat holiday bonus (see Appendix A11 for the exact formula)
+   - Evening Premium for 18:00–23:00 (default $25) — added on top of base rate for evening hours
+   - Overnight Premium for 23:00–08:00 (default $35) — added on top of base rate for overnight hours
+   - Cost Share (default $1.40/hr) — per-hour holdback deducted from physician pay, charged only on regular (payable) hours
+   - Operational Holdback (default $7.45/hr) — per-hour holdback, same basis. Together with Cost Share, these two replace the previous flat-percentage overhead holdback (see Appendix A11 for the exact formula)
 4. **Output Spreadsheet URL** — Paste the URL of the blank Google Sheet you created for financial output
 5. Click **Generate Report →**
 
 **How hours and pay work:**
 - The number of regular, evening, and overnight hours per shift type are read from the schedule itself (rows 5–7 of each month tab). This means you can adjust hours dynamically by editing the schedule — no code changes needed.
-- Evening and overnight bonus rates are **added on top of** the base rate. For example, an evening hour pays $150 + $25 = $175.
-- **Weekend bonus:** Regular hours worked on Saturday or Sunday receive the evening bonus rate on top of base rate — but **only for pure daytime shifts** (shifts with zero evening hours and zero overnight hours). Evening and overnight shifts on a weekend continue to earn their normal evening/overnight after-hours bonus and do **not** also receive the weekend premium. The weekend bonus is included in the After Hours total.
-- **Stat holiday bonus:** All hours worked on a stat holiday receive an additional 0.5 × base hourly rate. Stat holidays also receive the weekend bonus on the same daytime-only basis as above (pure daytime stat shifts get the evening rate on regular hours; evening/overnight stat shifts do not). The stat holiday bonus itself (the 0.5 × base piece) is tracked as its own category in all reports — it is **not** included in the After Hours total.
+- Evening and overnight premium rates are **added on top of** the base rate. For example, an evening hour pays $150 + $25 = $175.
+- **Weekend Day Premium:** Regular hours worked on Saturday or Sunday receive the evening premium rate on top of base rate — but **only for pure daytime shifts** (shifts with zero evening hours and zero overnight hours). Evening and overnight shifts on a weekend continue to earn their normal evening/overnight after-hours premium and do **not** also receive the Weekend Day Premium. The Weekend Day Premium is included in the After Hours total (paid quarterly — see Step 4 tab descriptions below).
+- **Stat Holiday Premium:** All hours worked on a stat holiday receive an additional 0.5 × base hourly rate. Stat holidays also receive the Weekend Day Premium on the same daytime-only basis as above (pure daytime stat shifts get the evening rate on regular hours; evening/overnight stat shifts do not). The Stat Holiday Premium itself (the 0.5 × base piece) is tracked as its own category in all reports — it is **not** included in the After Hours total, and it is paid to physicians biweekly alongside base pay rather than with the quarterly after-hours lump sum.
 - **Overlap detection** handles two cases: (1) same-day overlaps, where a daytime shift ends after the next shift starts (e.g. 08–17 followed by 16–01 on the same day = 1 hour overlap), and (2) cross-midnight overlaps, where an evening shift runs past midnight into a next-day shift (e.g. ER EVE 16–01 on Day 1 followed by HOME CALL 00–08 on Day 2 = 1 hour overlap). In both cases the overlapping hours are deducted from the **second** shift's invoiceable hours only. Physicians are still paid in full for all hours worked — the deduction only prevents double-invoicing the health authority.
 
 ### Parsed Output Tabs
@@ -101,15 +102,25 @@ After parsing completes (Step 1 + Step 2), the parsed output spreadsheet will co
 
 ### Step 4 — Results
 
-You'll see KPI summary cards showing totals for the period, plus a link to open the financial report spreadsheet. The report contains these tabs:
+You'll see KPI summary cards showing totals for the period, a simple per-physician payroll sanity-check table (Physician, Shifts, Payable Hrs, Stat Pay, Gross Pay, Holdback, Net Pay), and two action buttons:
 
-- **KPI Summary** — Period parameters and aggregate totals. Each premium is broken out on its own line: Total Base Pay, Total Evening Bonus Pay, Total Overnight Bonus Pay, Total Weekend Bonus Pay, Total After Hours Pay (the sum of those three premiums), Total Base + After Hours (base pay plus the after-hours total, excluding stat), Total Stat Holiday Bonus, Total Gross Pay, Total Holdback, and Total Net Payout.
-- **Payroll Summary** — Per-physician compensation broken out into separate columns: Base_Pay, Eve_Bonus, ON_Bonus, Weekend_Bonus, After_Hours (sum of the three premiums), Base_Plus_After_Hrs (Base_Pay + After_Hours, excludes stat), Stat_Bonus, Gross_Pay (everything including stat), Holdback, and Net_Pay.
-- **HA Invoice** — Health authority invoice with the same premium breakdown as Payroll Summary: Invoiceable_Hrs, Base_Pay, Eve_Bonus, ON_Bonus, Weekend_Bonus, After_Hours, Base_Plus_After_Hrs, Stat_Bonus, and Invoice_Amount (the grand total billed to the HA).
-- **Physician Detail** — Every shift for every physician with the full hour and pay breakdown. Money columns read left-to-right as: Base_Pay → Eve_Bonus → ON_Bonus → Weekend_Bonus → After_Hours → Base_Plus_After_Hrs → Stat_Bonus → Gross, so you can follow exactly how a single shift's pay was built up.
-- **Overlap Log** — Back-to-back shifts with overlapping hours, showing which shift had invoiceable hours deducted
+- **Download QuickBooks CSV ↓** — Generates a CSV file locally with one row per physician and 13 columns (Physician, Pay Period, Period Start Date, Period End Date, 8h Shifts, 9h Shifts, Other Shifts, Payable Hours, Base Pay, Stat Pay, Gross Pay, Total Holdback, Net Pay). Filename follows the pattern `VHA Hospitalist Payroll 2026-04-15 to 2026-04-28.csv`. Forward this file to the accountant so they can enter biweekly interim payments in QuickBooks.
+- **Open Report ↗** — Opens the financial report Google Sheet with the detailed tabs below.
 
-Click **Open Report ↗** to view the spreadsheet in Google Sheets.
+The financial report spreadsheet contains these tabs, in the order the finance lead will want to use them:
+
+1. **KPI Summary** — Period parameters and aggregate totals, organized into clearly marked sections: Rates, Hour Counts, Pay Components, Interim Payroll, After Hours Payroll, HA Invoice, Physician Net Payout, and Reconciliation. Look for the `✓ Matches` reconciliation line at the bottom — it confirms that `Total Interim Gross + Total After Hours Pay = Total Gross Pay`. If you ever see a Delta there, the math is broken and I need to know.
+2. **Interim Payroll** — Biweekly pay run. Columns: Physician, 8h_Shifts, 9h_Shifts, Other_Shifts, Regular_Hrs, Base_Pay, Stat_Premium, Interim_Gross (Base + Stat), Cost_Share, Op_Holdback, Total_Holdback, Interim_Net. This is what the financial manager uses to run each biweekly cycle.
+3. **HA Invoice – Interim** — What the health authority reimburses the practice for base hours, overlap-adjusted. Columns: Physician, Invoiceable_Hrs, Base_Invoice_Amount. Stat premium is NOT invoiced here (see A12).
+4. **After Hours Payroll** — Quarterly premium lump-sum pay. Columns: Physician, Evening_Hrs, Overnight_Hrs, Weekend_Day_Hrs, Total_After_Hrs, Eve_Premium, ON_Premium, Weekend_Day_Premium, After_Hours_Total. Used once per quarter when HA funds arrive.
+5. **HA Invoice – After Hours** — Premium pay invoiced to HA quarterly. Columns: Physician, Evening_Hrs, Overnight_Hrs, Weekend_Day_Hrs, Eve_Premium, ON_Premium, Weekend_Day_Premium, After_Hours_Invoice_Amount.
+6. **Payroll Summary** — Comprehensive audit view with every pay component in one place: Base_Pay, Eve_Premium, ON_Premium, Weekend_Day_Premium, After_Hours, Base_Plus_After_Hrs, Stat_Premium, Gross_Pay, Cost_Share, Op_Holdback, Total_Holdback, Net_Pay. Useful for reconciliation.
+7. **Physician Detail** — Every shift for every physician with full hour and pay breakdown, including per-shift holdback allocation.
+8. **Overlap Log** — Back-to-back shifts with overlapping hours (appears only when overlaps exist).
+
+**Payment cadence at a glance.** The Interim Payroll tab drives the biweekly pay run (base + stat premium, less holdback). The After Hours Payroll tab drives the quarterly lump-sum premium pay. They sum back to Total Gross Pay — the reconciliation line on KPI Summary verifies this every run.
+
+**Re-running on an old output spreadsheet?** If you're re-using a spreadsheet that was produced by pre-April-2026 code, it will still have an old "HA Invoice" tab from before the split. That tab will have stale data (it used to include stat premium, which isn't correct anymore). Right-click it in Google Sheets → Delete. New tabs from this code version won't touch it.
 
 ---
 
@@ -123,8 +134,8 @@ The source schedule spreadsheet must follow this row structure in each month tab
 | **Row 2–3** | (Other info — skipped by parser) | |
 | **Row 4** | Start–end times per shift column | `08 - 17`, `16 - 01`, `24 - 08` |
 | **Row 5** | Regular hours to pay per shift | `9`, `8`, `0` |
-| **Row 6** | Evening bonus hours to pay per shift | `0`, `5`, `0` |
-| **Row 7** | Overnight bonus hours to pay per shift | `0`, `0`, `8` |
+| **Row 6** | Evening premium hours to pay per shift | `0`, `5`, `0` |
+| **Row 7** | Overnight premium hours to pay per shift | `0`, `0`, `8` |
 | **Row 8+** | Date rows with physician names | `1-Mar`, `Mon`, `Dr. Smith`, `Dr. Jones`, etc. |
 
 **Important:** Rows 4–7 control how many hours of each type are paid and invoiced per shift. If you need to change compensation for a shift type (e.g., give UCC/Ward fewer evening hours), just update the value in row 6 of that column — no code changes needed.
@@ -173,7 +184,7 @@ December 25
 December 26
 ```
 
-The parser will automatically detect this tab and apply weekend/stat holiday bonuses when generating financial reports. If no "Stat Holidays" tab is found, stat holiday bonuses are simply skipped.
+The parser will automatically detect this tab and apply weekend/stat holiday premiumes when generating financial reports. If no "Stat Holidays" tab is found, stat holiday premiumes are simply skipped.
 
 ---
 
@@ -185,8 +196,8 @@ The engine detects shift columns dynamically from the column headers in your sch
 2. **Fill in rows 4–7** for that column, just like the existing shifts:
    - **Row 4** — Shift start and end time (e.g. `08 - 17`, `16 - 01`)
    - **Row 5** — Total regular/payable hours for the shift (e.g. `9`)
-   - **Row 6** — How many of those hours earn the evening bonus (e.g. `5`, or `0` if none)
-   - **Row 7** — How many of those hours earn the overnight bonus (e.g. `0`)
+   - **Row 6** — How many of those hours earn the evening premium (e.g. `5`, or `0` if none)
+   - **Row 7** — How many of those hours earn the overnight premium (e.g. `0`)
 3. **Fill in physician names** in the date rows (Row 8+) as usual.
 4. **Run the parser** — the new column will be picked up automatically and appear in the parsed output and financial reports.
 
@@ -199,7 +210,7 @@ If you only need the new shift in certain months, just add the column to those m
 - **Reuse output spreadsheets.** You don't need a new blank sheet every time — the app overwrites the tabs. Just use the same output URLs for each run.
 - **Check the Physician Detail tab** if numbers look off. It shows every shift individually so you can trace how hours and pay were calculated.
 - **The Back to Back Shifts tab** in the parsed output is always created so you can confirm overlap detection ran. If there are no overlapping shifts, the tab will say "No overlapping back-to-back shifts detected."
-- **Rows 4–7 must be filled** for every shift column in every month tab. If a column is missing its reference rows, the parser will try to calculate hours from the time range, but evening and overnight bonus hours will default to zero.
+- **Rows 4–7 must be filled** for every shift column in every month tab. If a column is missing its reference rows, the parser will try to calculate hours from the time range, but evening and overnight premium hours will default to zero.
 
 ---
 
@@ -214,7 +225,7 @@ If you only need the new shift in certain months, just add the column to those m
 | "Fewer than 5 entries parsed" | Either the schedule URL is wrong, no months were selected, or every selected month tab had a structural problem. Check the tab-specific error details included in the message. |
 | No shifts found in period | The date range doesn't overlap with any shifts in the parsed schedule — check that you parsed the right months |
 | Name shows as UNRESOLVED | The physician name in the schedule doesn't match anything in the Contact Info tab — correct it in Step 2 |
-| Physician worked UCC/Ward + Home Call on the same row — pay looks wrong | This is a hard-coded exception (see Appendix A8.1). The engine forces UCC/Ward to 15 regular + 5 evening hours and drops Home Call from the Parsed Schedule / financial engine. On the Clean — `<Month>` tab the Home Call cell is **kept with the physician's name and highlighted light green** so the concurrent scenario is visible at a glance. Confirm the override fired by: (1) the green cell on the Clean tab, (2) a row in the Duplicate Log with `is_concurrent_override = true`, and (3) 15 Regular_Hrs / 5 Evening_Hrs on the UCC/Ward row in Parsed Schedule (which will also be highlighted green). Note the Clean tab still shows the original schedule reference rows (including UCC/Ward's `9` in row 5) — those are copied verbatim from the source. |
+| Physician worked UCC/Ward + Home Call on the same row — pay looks wrong | This is a hard-coded exception (see Appendix A8.1). The engine forces UCC/Ward to 15 regular + 4 evening premium hours and drops Home Call from the Parsed Schedule / financial engine. On the Clean — `<Month>` tab the Home Call cell is **kept with the physician's name and highlighted light green** so the concurrent scenario is visible at a glance. Confirm the override fired by: (1) the green cell on the Clean tab, (2) a row in the Duplicate Log with `is_concurrent_override = true`, and (3) 15 Regular_Hrs / 4 Evening_Hrs on the UCC/Ward row in Parsed Schedule (which will also be highlighted green). Note the Clean tab still shows the original schedule reference rows (including UCC/Ward's `9` in row 5) — those are copied verbatim from the source. |
 
 ---
 
@@ -244,7 +255,7 @@ The parsed schedule is read from the "Parsed Schedule" tab of the parsed output 
 
 The pay period is one of three forms. **Full Month** uses the first through the last day of a selected calendar month. **Bi-Weekly** takes a known start date of any two-week cycle and picks the fortnight that falls within your chosen month. **Custom Range** takes two dates in `DD-Mon` form (e.g. `1-Mar` to `14-Mar`). Only shifts whose date falls within the selected period are included.
 
-The rate parameters default to base $200.10/hr, evening bonus $25/hr, overnight bonus $35/hr, and holdback 2%, but you can override any of these in the UI before generating the report. Every rule below uses whatever values you set for that specific run.
+The rate parameters default to base $200.10/hr, evening premium $25/hr, overnight premium $35/hr, cost share $1.40/hr, and operational holdback $7.45/hr, but you can override any of these in the UI before generating the report. Every rule below uses whatever values you set for that specific run.
 
 ### A2. The Two Kinds of Hours
 
@@ -266,60 +277,60 @@ base_pay = regular_hrs × base_rate
 
 Example: a day shift with 9 regular hours at a base rate of $200.10 earns `9 × $200.10 = $1,800.90` in base pay. This is the same for every shift regardless of time of day, day of week, or stat holiday status.
 
-### A4. Evening Bonus
+### A4. Evening Premium (formerly Evening Bonus)
 
-Hours marked as "evening" in row 6 of the schedule earn an additional evening bonus rate on top of the base rate. This is **not** the total pay for those hours — it's a premium added to the base pay the physician already earned for the same hours.
+Hours marked as "evening" in row 6 of the schedule earn an additional evening premium rate on top of the base rate. This is **not** the total pay for those hours — it's a premium added to the base pay the physician already earned for the same hours.
 
 ```
-eve_bonus = evening_hrs × evening_rate
+eve_premium = evening_hrs × evening_rate
 ```
 
-Example: an ER eve shift labelled `16 - 01` might have 9 regular hours and 5 evening hours. At $200.10 base + $25 evening bonus, the physician earns `9 × $200.10 = $1,800.90` in base pay plus `5 × $25 = $125.00` in evening bonus, for a total of $1,925.90 on that shift.
+Example: an ER eve shift labelled `16 - 01` might have 9 regular hours and 5 evening hours. At $200.10 base + $25 evening premium, the physician earns `9 × $200.10 = $1,800.90` in base pay plus `5 × $25 = $125.00` in evening premium, for a total of $1,925.90 on that shift.
 
 The engine does not look at the actual clock times to decide which hours are evening — it trusts the evening hour count you set in row 6 of the schedule. If you need to change what counts as an evening hour for a particular shift type, edit row 6 of that column in the schedule and re-parse.
 
-### A5. Overnight Bonus
+### A5. Overnight Premium (formerly Overnight Bonus)
 
-Hours marked as "overnight" in row 7 of the schedule earn an additional overnight bonus rate on top of the base rate. Same structure as the evening bonus.
+Hours marked as "overnight" in row 7 of the schedule earn an additional overnight premium rate on top of the base rate. Same structure as the evening premium.
 
 ```
-on_bonus = overnight_hrs × overnight_rate
+on_premium = overnight_hrs × overnight_rate
 ```
 
-Example: a home call shift `24 - 08` might have 8 regular hours and 8 overnight hours. At $200.10 base + $35 overnight bonus, the physician earns `8 × $200.10 = $1,600.80` in base plus `8 × $35 = $280.00` in overnight bonus, for $1,880.80 on that shift.
+Example: a home call shift `24 - 08` might have 8 regular hours and 8 overnight hours. At $200.10 base + $35 overnight premium, the physician earns `8 × $200.10 = $1,600.80` in base plus `8 × $35 = $280.00` in overnight premium, for $1,880.80 on that shift.
 
-Evening and overnight bonuses can both apply to the same shift if rows 6 and 7 both have non-zero values (e.g. a shift with 4 evening hours and 4 overnight hours).
+Evening and overnight premiumes can both apply to the same shift if rows 6 and 7 both have non-zero values (e.g. a shift with 4 evening hours and 4 overnight hours).
 
-### A6. Weekend Bonus
+### A6. Weekend Day Premium (formerly Weekend Bonus)
 
-Saturdays and Sundays attract an additional premium — but only on **pure daytime shifts**. A shift is considered a pure daytime shift when its evening hours **and** overnight hours are both zero. The weekend bonus is calculated at the evening bonus rate (not a separate weekend rate):
+Saturdays and Sundays attract an additional premium — but only on **pure daytime shifts**. A shift is considered a pure daytime shift when its evening hours **and** overnight hours are both zero. The Weekend Day Premium is calculated at the evening premium rate (not a separate weekend rate):
 
 ```
 if (is_weekend AND evening_hrs == 0 AND overnight_hrs == 0):
-    weekend_bonus = regular_hrs × evening_rate
+    weekend_premium = regular_hrs × evening_rate
 else:
-    weekend_bonus = 0
+    weekend_premium = 0
 ```
 
-Example: a physician working an LB8A day shift on Saturday (9 regular hours, 0 evening, 0 overnight) earns `9 × $200.10 = $1,800.90` in base plus `9 × $25 = $225.00` in weekend bonus, for $2,025.90 on that shift.
+Example: a physician working an LB8A day shift on Saturday (9 regular hours, 0 evening, 0 overnight) earns `9 × $200.10 = $1,800.90` in base plus `9 × $25 = $225.00` in Weekend Day Premium, for $2,025.90 on that shift.
 
-Counter-example: the same physician working ER eve on a Saturday already has evening hours attached to the shift, so the weekend bonus does **not** apply on top. They earn base + evening bonus as usual. The reasoning is that the evening/overnight premium already compensates them for working after-hours, and stacking a weekend premium on top would double-count.
+Counter-example: the same physician working ER eve on a Saturday already has evening hours attached to the shift, so the Weekend Day Premium does **not** apply on top. They earn base + evening premium as usual. The reasoning is that the evening/overnight premium already compensates them for working after-hours, and stacking a weekend premium on top would double-count.
 
-The weekend bonus is included in the "After Hours" total (see A9) even though the hours are daytime. This is intentional — "After Hours" is the engine's label for all premiums above base pay, not a statement about when the work was done.
+The Weekend Day Premium is included in the "After Hours" total (see A9) even though the hours are daytime. This is intentional — "After Hours" is the engine's label for all premiums above base pay, not a statement about when the work was done.
 
-### A7. Stat Holiday Bonus
+### A7. Stat Holiday Premium (formerly Stat Holiday Bonus)
 
 If a shift's date matches a date in the "Stat Holidays" tab of your source schedule, every hour on that shift earns an extra 0.5 × base rate on top of everything else. This applies to the full regular hours of the shift, regardless of whether it's a day, evening, or overnight shift.
 
 ```
-stat_bonus = regular_hrs × (0.5 × base_rate)
+stat_premium = regular_hrs × (0.5 × base_rate)
 ```
 
-Example: a physician working an LB8A day shift on a stat holiday (9 regular hours) with a base rate of $200.10 earns a stat bonus of `9 × (0.5 × $200.10) = 9 × $100.05 = $900.45` on top of their base pay and any other applicable bonuses.
+Example: a physician working an LB8A day shift on a stat holiday (9 regular hours) with a base rate of $200.10 earns a stat premium of `9 × (0.5 × $200.10) = 9 × $100.05 = $900.45` on top of their base pay and any other applicable premiums.
 
-Stat holiday dates also receive the weekend bonus on the same daytime-only rule as Saturday/Sunday. So a pure daytime stat shift earns **both** the stat bonus and the weekend bonus. An evening or overnight stat shift earns the stat bonus but not the weekend bonus (same reasoning as A6).
+Stat holiday dates also receive the Weekend Day Premium on the same daytime-only rule as Saturday/Sunday. So a pure daytime stat shift earns **both** the stat premium and the Weekend Day Premium. An evening or overnight stat shift earns the stat premium but not the Weekend Day Premium (same reasoning as A6).
 
-The stat bonus is **tracked separately** from the After Hours total. On reports you'll see it as its own line ("Stat_Bonus" column, "Total Stat Holiday Bonus" KPI). The "Base + After Hours" total excludes it. The "Gross Pay" total includes it.
+The stat premium is **tracked separately** from the After Hours total. On reports you'll see it as its own line ("Stat_Premium" column, "Total Stat Holiday Premium" KPI). The "Base + After Hours" total excludes it. The "Gross Pay" total includes it.
 
 ### A8. Overlap Detection and Invoiceable Deduction
 
@@ -349,18 +360,18 @@ There is exactly one hard-coded override baked into the parser that deliberately
 
 **What the override does.** When the parser detects the same physician appearing in both `UCC_WARD` and `HOME_CALL` columns on the same date, it:
 
-- Stamps the UCC/Ward entry with **regular_hrs = 15, evening_hrs = 5, overnight_hrs = 0** — replacing whatever the reference row says. In the Parsed Schedule tab the resulting row is highlighted **light green**.
-- Marks the Home Call entry as suppressed so the financial engine never sees it. It is removed from the Parsed Schedule tab and logged in the Duplicate Log tab with `is_concurrent_override = true` and the reason "UCC/Ward + Home Call concurrent override — physician paid 15h base + 5h evening only".
+- Stamps the UCC/Ward entry with **regular_hrs = 15, evening_hrs = 4, overnight_hrs = 0** — replacing whatever the reference row says. In the Parsed Schedule tab the resulting row is highlighted **light green**.
+- Marks the Home Call entry as suppressed so the financial engine never sees it. It is removed from the Parsed Schedule tab and logged in the Duplicate Log tab with `is_concurrent_override = true` and the reason "UCC/Ward + Home Call concurrent override — physician paid 15h base + 4h evening only".
 - On the Clean — Month tab, the Home Call cell for that physician/date is **kept with the physician's name visible and highlighted light green**. This is a deliberate change from earlier versions that blanked the cell. The concurrent scenario is now self-evident at a glance when reviewing the Clean tab.
 
-**Worked example (March 17, Dr. Yu).** The schedule has Yu in column 19 (UCC/Ward, 17–08) and column 22 (Home Call, 24–08) on the same row. Without the override, Yu would be credited with 9 + 8 = 17 base hours plus whatever overnight bonus Home Call pays — an over-payment because Yu is really only working 15 clock-hours. With the override in place, Yu's UCC/Ward entry is stamped to `Regular_Hrs=15, Evening_Hrs=5, Overnight_Hrs=0` (green row in Parsed Schedule), the Home Call entry is removed from Parsed Schedule but Yu's name is retained in the Home Call cell on the Clean — March tab with a green background, and the financial report shows exactly **$3,126.50** gross pay (15 × $200.10 base + 5 × $25 evening) and **15** invoiceable hours billed to the health authority.
+**Worked example (March 17, Dr. Yu).** The schedule has Yu in column 19 (UCC/Ward, 17–08) and column 22 (Home Call, 24–08) on the same row. Without the override, Yu would be credited with 9 + 8 = 17 base hours plus whatever overnight premium Home Call pays — an over-payment because Yu is really only working 15 clock-hours. With the override in place, Yu's UCC/Ward entry is stamped to `Regular_Hrs=15, Evening_Hrs=4, Overnight_Hrs=0` (green row in Parsed Schedule), the Home Call entry is removed from Parsed Schedule but Yu's name is retained in the Home Call cell on the Clean — March tab with a green background, and the financial report shows exactly **$3,101.50** gross pay (15 × $200.10 base + 4 × $25 evening premium) and **15** invoiceable hours billed to the health authority.
 
 **Important gotcha — the Clean tab reference rows are unchanged.** The Clean — Month tab is a faithful mirror of your original schedule layout, including the reference rows at the top. It will still show `9` in row 5 under the UCC/Ward column, even after the override fires. Only the *data cells* for the physician(s) affected get the green highlight. The Parsed Schedule tab (and everything downstream of it — Payroll Summary, HA Invoice, KPI Summary) reflects the overridden values. If you ever need to verify what actually got paid, look at Parsed Schedule, not the Clean tab reference rows.
 
 **How to tell if the override fired.** Three independent signals:
 
 1. The Clean — Month tab has a **light green cell** containing the physician's name in the Home Call column (and another green cell in the UCC/Ward column for the same physician/date).
-2. The Parsed Schedule tab has a **light green row** for that physician on that date with UCC/Ward showing 15/5/0.
+2. The Parsed Schedule tab has a **light green row** for that physician on that date with UCC/Ward showing 15/4/0.
 3. The Duplicate Log tab has a row with `is_concurrent_override = true` for that physician/date.
 
 See also the **Legend** tab in the parsed output for a quick reference to the three highlight colours used (green, orange, purple).
@@ -373,9 +384,9 @@ The parsed output spreadsheet uses three background colours to flag shifts that 
 
 | Colour | Meaning | Where it appears | What to do |
 |--------|---------|------------------|------------|
-| **Light green** | Concurrent override — UCC/Ward + Home Call on the same physician/date. Hours forced to 15 regular + 5 evening (see A8.1). | Clean tab: UCC/Ward *and* Home Call cells for that physician/date. Parsed Schedule: the UCC/Ward row (the Home Call row is removed). | Nothing — the override is automatic. The colour is an audit marker. |
+| **Light green** | Concurrent override — UCC/Ward + Home Call on the same physician/date. Hours forced to 15 regular + 4 evening premium (see A8.1). | Clean tab: UCC/Ward *and* Home Call cells for that physician/date. Parsed Schedule: the UCC/Ward row (the Home Call row is removed). | Nothing — the override is automatic. The colour is an audit marker. |
 | **Orange** | Back-to-back overlap — the second of two consecutive shifts whose times overlap. Invoiceable hours on the second shift are auto-reduced; the physician is still paid in full. | Clean tab: the cell for the *second* (later) shift. Parsed Schedule: the second shift's row. | Nothing — the deduction is automatic. Cross-reference the **Back to Back Shifts** tab for the numeric detail. |
-| **Purple** | Stat holiday shift — the shift falls on a statutory holiday as defined in the source schedule's Stat Holidays tab. | Clean tab: every data cell on that date. Parsed Schedule: every row on that date. | Nothing — stat bonus is applied by the financial engine. The colour confirms the date was recognised as a stat holiday. |
+| **Purple** | Stat holiday shift — the shift falls on a statutory holiday as defined in the source schedule's Stat Holidays tab. | Clean tab: every data cell on that date. Parsed Schedule: every row on that date. | Nothing — stat premium is applied by the financial engine. The colour confirms the date was recognised as a stat holiday. |
 
 **Priority when a cell qualifies for more than one.** A concurrent-override cell wins over a back-to-back overlap, which wins over a stat holiday. In practice overlaps between these are rare, but the rule keeps each cell a single clean colour rather than a muddy blend.
 
@@ -387,17 +398,17 @@ For a single shift, the engine computes these values in this order:
 
 ```
 base_pay        = regular_hrs × base_rate
-eve_bonus       = evening_hrs × evening_rate
-on_bonus        = overnight_hrs × overnight_rate
-weekend_bonus   = (is_weekend_or_stat AND daytime_only) ? regular_hrs × evening_rate : 0
-stat_bonus      = is_stat_holiday ? regular_hrs × (0.5 × base_rate) : 0
+eve_premium       = evening_hrs × evening_rate
+on_premium        = overnight_hrs × overnight_rate
+weekend_premium   = (is_weekend_or_stat AND daytime_only) ? regular_hrs × evening_rate : 0
+stat_premium      = is_stat_holiday ? regular_hrs × (0.5 × base_rate) : 0
 
-after_hours     = eve_bonus + on_bonus + weekend_bonus
+after_hours     = eve_premium + on_premium + weekend_premium
 base_plus_after = base_pay + after_hours
-gross           = base_plus_after + stat_bonus
+gross           = base_plus_after + stat_premium
 ```
 
-Note carefully: the stat bonus is added **after** `base_plus_after`, so it does not contribute to the "After Hours" line on any report. This is intentional — "After Hours" is a category that tracks premium pay for inconvenient work times (evening/overnight/weekend), while the stat bonus is a separate holiday premium that sits in its own column.
+Note carefully: the stat premium is added **after** `base_plus_after`, so it does not contribute to the "After Hours" line on any report. This is intentional — "After Hours" is a category that tracks premium pay for inconvenient work times (evening/overnight/weekend), while the stat premium is a separate holiday premium that sits in its own column.
 
 ### A10. Weekend Daytime Shift Dedup (Parser-Level)
 
@@ -413,30 +424,50 @@ This rule does **not** apply to evening or overnight shifts. If a physician has 
 
 Example of what gets suppressed: weekend pair-ward coverage where the schedule has two columns both labelled "LB8A" with the same physician in both. The first is kept (goes to both Payroll and Clean tab), the second is logged as a duplicate and blanked from the Clean tab so the visible weekend row matches what was actually worked.
 
-### A11. Physician Totals and the KPI Roll-Up
+### A11. Physician Totals, Holdback, and the KPI Roll-Up
 
 After every shift has been priced, the engine sums each physician's shifts into a per-physician total and then sums all physicians into period totals.
 
-Per-physician totals are written to the **Payroll Summary** tab. The columns are: `Base_Pay`, `Eve_Bonus`, `ON_Bonus`, `Weekend_Bonus`, `After_Hours` (sum of the three premiums), `Base_Plus_After_Hrs`, `Stat_Bonus`, `Gross_Pay` (everything including stat), `Holdback`, and `Net_Pay`.
+**Payment cadence.** The practice pays physicians on two schedules:
 
-The holdback is a flat percentage applied to **base pay only** — not to after-hours bonuses and not to the stat holiday bonus. Premium pay (evening, overnight, weekend, and stat holiday) reaches the physician in full; only the regular-hours portion of compensation is subject to the holdback.
+- **Interim (biweekly)** — the practice pays each physician `base_pay + stat_premium − total_holdback` on the regular biweekly cycle.
+- **After Hours (quarterly)** — once the HA remits the after-hours reimbursement each quarter, the practice pays each physician `eve_premium + on_premium + weekend_day_premium` as a lump sum. No holdback applies to this.
+
+Both amounts together sum to the physician's total compensation for the period (`Gross Pay = Interim Gross + After Hours Pay`). The KPI Summary tab has a reconciliation line that verifies this equality on every run.
+
+**Holdback formula.** Holdback is computed as two per-hour deductions on regular (payable) hours — Cost Share ($/hr) and Operational Holdback ($/hr) — applied to every shift regardless of day/evening/overnight/stat. The premiums themselves (evening, overnight, weekend day, stat holiday) are not subject to holdback.
 
 ```
-holdback = base_pay × (holdback_pct / 100)
-net_pay  = gross − holdback
+cost_share      = regular_hrs × cost_share_per_hour
+op_holdback     = regular_hrs × op_holdback_per_hour
+total_holdback  = cost_share + op_holdback
+
+interim_gross   = base_pay + stat_premium
+interim_net     = interim_gross − total_holdback
+after_hours_pay = eve_premium + on_premium + weekend_day_premium
+
+gross           = interim_gross + after_hours_pay
+net_pay         = gross − total_holdback
 ```
 
-Example: a physician with `base_pay = $16,000`, `after_hours = $1,800`, `stat_bonus = $200` and a 2% holdback has `gross = $18,000`, `holdback = $16,000 × 0.02 = $320.00`, and `net_pay = $18,000 − $320 = $17,680.00`. Compare this to the older policy of holdback on gross, which would have produced a holdback of $360 and a net of $17,640 — the difference ($40 in this example) represents the holdback that is no longer taken from premium pay.
+Example: a physician with 160 regular hours, `base_pay = $32,016`, `stat_premium = $900`, `after_hours_pay = $1,800`, at default rates ($1.40 cost share + $7.45 op holdback = $8.85/hr total) has `cost_share = 160 × $1.40 = $224.00`, `op_holdback = 160 × $7.45 = $1,192.00`, `total_holdback = $1,416.00`. Their `interim_gross = $32,016 + $900 = $32,916`, `interim_net = $32,916 − $1,416 = $31,500` (biweekly pay). Separately, they receive `$1,800` after-hours pay quarterly. Grand total net = `$31,500 + $1,800 = $33,300`.
 
-The **KPI Summary** tab is a roll-up of all physicians combined — same line items, same math, just summed across the whole period.
+**Internal funding of Stat Holiday Premium.** The Stat Holiday Premium is paid to physicians in their biweekly interim but is NOT invoiced to the health authority (see A12). It is funded internally from the holdback pool. This means the holdback dollars the practice deducts from physicians are partially used to pay stat holiday premiums across the group.
+
+**Where these appear in the output.** The per-physician totals are written to the **Interim Payroll** tab (biweekly view), **After Hours Payroll** tab (quarterly view), and **Payroll Summary** tab (comprehensive view). The **KPI Summary** tab aggregates all physicians into period totals, organized into the sections listed in Step 4 above.
 
 ### A12. Health Authority Invoice
 
-The **HA Invoice** tab uses a subset of the per-physician totals formatted as an invoice line per physician. The crucial difference from Payroll Summary is that the HA Invoice uses **Invoiceable Hours** (post-overlap-deduction), not Payable Hours (pre-deduction).
+Under the biweekly + quarterly payment structure, the HA invoice is split into **two** separate tabs in the output, aligned with the payment cadence. Both exclude Stat Holiday Premium — that amount is internally redistributed from the holdback pool, not billable to the HA.
 
-Per-physician invoice amounts still equal Gross Pay, because the overlap deduction only affects the Invoiceable Hours column — not the dollar amounts. The dollar amounts on the HA Invoice are identical to Payroll Summary. The hours column is what differs, and it's that column that matters when reconciling hours billed against hours paid to physicians.
+- **HA Invoice – Interim** — Columns: Physician, Invoiceable_Hrs, Base_Invoice_Amount. Represents what the HA reimburses for base hours. `Base_Invoice_Amount = invoiceable_hrs × base_rate`, using overlap-adjusted hours so back-to-back overlap isn't double-billed.
+- **HA Invoice – After Hours** — Columns: Physician, Evening_Hrs, Overnight_Hrs, Weekend_Day_Hrs, Eve_Premium, ON_Premium, Weekend_Day_Premium, After_Hours_Invoice_Amount. Represents what the HA pays for premium hours quarterly.
 
-If you ever need to reconcile total hours paid vs. total hours billed, the difference between `Total Payable Hours` and `Total Invoiceable Hours` on the KPI tab equals the total hours deducted by overlap detection — which should also equal the sum of the `overlap_hours` column on the Overlap Log tab.
+**What the HA total invoice equals.** `Total HA Invoice = Total Base Pay (overlap-adjusted) + Total After Hours Pay`. Compare to total compensation: `Total Gross Pay = Total Base Pay + Total Stat Premium + Total After Hours Pay`. The difference is the Stat Premium — funded from the holdback pool, not from HA funds.
+
+**Reconciliation for hours.** If you ever need to reconcile total hours paid vs. total hours billed, the difference between `Total Payable Hours` and `Total Invoiceable Hours` on the KPI tab equals the total hours deducted by overlap detection — which should also equal the sum of the `overlap_hours` column on the Overlap Log tab.
+
+**Historical note.** Before April 2026, the engine invoiced the HA for Gross Pay (including Stat Premium), which was a bug — stat premium had to be paid from HA funds that the HA had never provided. The fix excludes stat premium from the HA invoice; it is now funded internally from the cost share + operational holdback pool. Existing pre-April-2026 output spreadsheets that were re-run with the new code will show a `HA Invoice` tab with stale data — delete it manually.
 
 ### A13. What the Engine Does Not Do
 
@@ -444,7 +475,7 @@ A few common expectations that the engine deliberately doesn't implement, so you
 
 The engine does not infer evening or overnight hours from shift start/end times. It reads the counts you set in rows 6 and 7 of the schedule. If a new shift type needs different premium hours, edit the schedule, not the code.
 
-The engine does not apply a separate "call" bonus or on-call stipend. Home call earns the overnight bonus via its row 7 value, the same way any other shift earns its premiums.
+The engine does not apply a separate "call" premium or on-call stipend. Home call earns the overnight premium via its row 7 value, the same way any other shift earns its premiums.
 
 The engine does not cap total daily or weekly hours. It trusts the schedule. If the schedule has a physician working 30 hours in a day, they'll be paid for 30 hours.
 
@@ -454,4 +485,13 @@ The engine does not apply different base rates by physician, shift type, or day 
 
 ---
 
-*Last updated: April 11, 2026*
+*Last updated: April 18, 2026*
+
+**Change log for this revision:**
+
+- UCC/Ward + Home Call concurrent override now credits 4 evening premium hours (was 5). Dr. Yu worked example gross pay recalculated from $3,126.50 to $3,101.50.
+- Overhead holdback changed from a flat percentage of base pay to two per-hour deductions on regular hours: Cost Share (default $1.40/hr) and Operational Holdback (default $7.45/hr).
+- Output tabs restructured to reflect the biweekly + quarterly payment cadence: added Interim Payroll, HA Invoice – Interim, After Hours Payroll, and HA Invoice – After Hours. Old comprehensive tabs (Payroll Summary, Physician Detail) retained for audit. KPI Summary reorganized into sections with a reconciliation check line.
+- Stat Holiday Premium is no longer invoiced to the health authority — it is funded internally from the holdback pool and paid to physicians in their biweekly interim alongside base pay.
+- Terminology change throughout: "Bonus" renamed to "Premium" (Evening Premium, Overnight Premium, Weekend Day Premium, Stat Holiday Premium). Internal JavaScript variable names retain the legacy "bonus" labels for code stability.
+- New QuickBooks CSV download button on Step 4. Generates `VHA Hospitalist Payroll YYYY-MM-DD to YYYY-MM-DD.csv` with 13 columns for the accountant's biweekly payment workflow.
