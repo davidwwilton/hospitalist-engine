@@ -315,12 +315,12 @@ function isDaytime(entry) {
 // shifts (UCC/Ward's full reference row PLUS Home Call's 8 base + 8 overnight),
 // which over-counts actual hours worked. The business rule in this specific
 // concurrent scenario is: pay only for actual hours worked, which is 15 base
-// hours plus 5 evening premium hours — no overnight bonus, no Home Call pay.
+// hours plus 4 evening premium hours — no overnight bonus, no Home Call pay.
 //
 // This override fires ONLY when a single physician has BOTH a UCC_WARD entry
 // AND a HOME_CALL entry on the same schedule row (same dateISO). When it fires:
 //   1. UCC/Ward's regular_hrs/evening_hrs/overnight_hrs are stamped to the
-//      override values (15/5/0) and payable/invoiceable mirror regular_hrs.
+//      override values (15/4/0) and payable/invoiceable mirror regular_hrs.
 //   2. Home Call is suppressed entirely (added to dupLog, blanked in Clean tab,
 //      absent from Parsed Schedule and financial report).
 //
@@ -331,7 +331,7 @@ function isDaytime(entry) {
 // See USER_GUIDE.md Appendix A8 for the full rationale and worked example.
 const UCC_WARD_HOMECALL_OVERRIDE = {
   regular_hrs: 15,
-  evening_hrs: 5,
+  evening_hrs: 4,
   overnight_hrs: 0,
 };
 

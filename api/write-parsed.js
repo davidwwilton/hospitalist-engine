@@ -455,7 +455,7 @@ export default async function handler(req, res) {
           Colour: "", // will be painted green
           Meaning: "Concurrent override (UCC/Ward + Home Call)",
           "Where it appears": "Clean — Month tab cell; Parsed Schedule UCC/Ward row",
-          Notes: "Physician worked UCC/Ward + Home Call on the same day. Pay forced to 15 regular + 5 evening hours. See USER_GUIDE Appendix A8.1.",
+          Notes: "Physician worked UCC/Ward + Home Call on the same day. Pay forced to 15 regular + 4 evening hours. See USER_GUIDE Appendix A8.1.",
         },
         {
           Colour: "", // orange
