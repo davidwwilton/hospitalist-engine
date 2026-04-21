@@ -79,14 +79,14 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
         <div className="form-group">
           <label>Period Type</label>
           <div className="radio-group horizontal">
-            {["month", "biweekly", "custom"].map((type) => (
+            {["month", "custom"].map((type) => (
               <label key={type} className="radio-label">
                 <input
                   type="radio"
                   checked={config.periodType === type}
                   onChange={() => update("periodType", type)}
                 />
-                <span>{type === "month" ? "Full Month" : type === "biweekly" ? "Bi-Weekly" : "Custom Range"}</span>
+                <span>{type === "month" ? "Full Month" : "Custom Range"}</span>
               </label>
             ))}
           </div>
@@ -109,51 +109,9 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
           </div>
         )}
 
-        {config.periodType === "biweekly" && (
-          <>
-            <div className="form-group">
-              <label>Month</label>
-              <div className="month-grid">
-                {ALL_MONTHS.map((m) => (
-                  <button
-                    key={m}
-                    className={`month-btn ${config.month === m ? "selected" : ""}`}
-                    onClick={() => update("month", m)}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Cycle Anchor Date <span className="required">*</span></label>
-              <input
-                type="date"
-                className="form-input"
-                value={config.biweeklyStart}
-                onChange={(e) => update("biweeklyStart", e.target.value)}
-              />
-              <span className="field-hint">The start date of any known pay period (YYYY-MM-DD)</span>
-            </div>
-            {biweeklyPeriods.length > 0 && (
-              <div className="form-group">
-                <label>Select Period</label>
-                <div className="period-options">
-                  {biweeklyPeriods.map(([s, e], i) => (
-                    <label key={i} className="radio-label">
-                      <input
-                        type="radio"
-                        checked={config.biweeklyIndex === i}
-                        onChange={() => update("biweeklyIndex", i)}
-                      />
-                      <span>{formatDate(s)} – {formatDate(e)}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        {/* Bi-Weekly UI hidden 2026-04-20 — kept backend logic intact.
+            To restore: add "biweekly" back to the radio array above and
+            restore this block from git history (commit prior to this one). */}
 
         {config.periodType === "custom" && (
           <div className="form-row">

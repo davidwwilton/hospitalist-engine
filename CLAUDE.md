@@ -63,6 +63,10 @@ Terminology: user-facing labels use "Premium" (Evening Premium, Overnight Premiu
 
 Step 4 has a "Download QuickBooks CSV" button that generates a client-side CSV of the interim (biweekly) payroll data. One row per physician, 13 columns (Physician, Pay Period, Period Start Date, Period End Date, 8h Shifts, 9h Shifts, Other Shifts, Payable Hours, Base Pay, Stat Pay, Gross Pay, Total Holdback, Net Pay). Filename: `VHA Hospitalist Payroll YYYY-MM-DD to YYYY-MM-DD.csv`. UTF-8 with BOM for Excel compatibility.
 
+## UI History / Hidden Features
+
+- **Bi-Weekly period type hidden from UI (2026-04-20)**: The "Bi-Weekly" radio option was removed from Step 3 because the association moved to monthly (and occasional custom-range) pay cycles. The backend logic in `api/financial.js` is still intact — only `src/components/Step3Financial.jsx` was changed (radio array + conditional block removed, dead state/helper/useEffect left in place for reversibility). To restore the UI: add `"biweekly"` back to the radio array in `Step3Financial.jsx` line 82 and re-add the biweekly conditional block from git history.
+
 ## Git Workflow
 
 From the Windows path above:
