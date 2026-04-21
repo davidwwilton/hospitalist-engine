@@ -56,11 +56,20 @@ function biweeklyForMonth(anchorStr, monthName) {
 }
 
 function parseDateSimple(s) {
-  const m = s.trim().match(/^(\d{1,2})-([A-Za-z]{3})$/);
-  if (!m) return null;
-  const mon = MONTH_ABBR[m[2].toLowerCase()];
-  if (!mon) return null;
-  return new Date(YEAR, mon-1, parseInt(m[1]));
+  const str = s.trim();
+  // ISO format: YYYY-MM-DD (preferred — produced by the date picker in Step 3)
+  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    return new Date(parseInt(iso[1]), parseInt(iso[2])-1, parseInt(iso[3]));
+  }
+  // Legacy format: D-Mon (e.g. "1-Mar") — kept for backward compatibility.
+  const dm = str.match(/^(\d{1,2})-([A-Za-z]{3})$/);
+  if (dm) {
+    const mon = MONTH_ABBR[dm[2].toLowerCase()];
+    if (!mon) return null;
+    return new Date(YEAR, mon-1, parseInt(dm[1]));
+  }
+  return null;
 }
 
 /**
@@ -357,7 +366,9 @@ export default async function handler(req, res) {
       periodStart = parseDateSimple(dateFrom);
       periodEnd   = parseDateSimple(dateTo);
       if (!periodStart||!periodEnd) return res.status(400).json({ error:"Could not parse date range" });
-      periodLabel = `Custom ${dateFrom}–${dateTo}`;
+      if (periodStart > periodEnd) return res.status(400).json({ error:"'From' date must be on or before 'To' date" });
+      const fmtCustom = d => d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
+      periodLabel = `Custom ${fmtCustom(periodStart)}–${fmtCustom(periodEnd)} ${periodStart.getFullYear()}`;
     }
 
     // Load parsed schedule

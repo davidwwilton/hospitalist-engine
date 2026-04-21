@@ -114,28 +114,35 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             restore this block from git history (commit prior to this one). */}
 
         {config.periodType === "custom" && (
-          <div className="form-row">
-            <div className="form-group">
-              <label>From (D-Mon)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="1-Mar"
-                value={config.dateFrom}
-                onChange={(e) => update("dateFrom", e.target.value)}
-              />
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label>From</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={config.dateFrom}
+                  max={config.dateTo || undefined}
+                  onChange={(e) => update("dateFrom", e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>To</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={config.dateTo}
+                  min={config.dateFrom || undefined}
+                  onChange={(e) => update("dateTo", e.target.value)}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label>To (D-Mon)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="14-Mar"
-                value={config.dateTo}
-                onChange={(e) => update("dateTo", e.target.value)}
-              />
-            </div>
-          </div>
+            {config.dateFrom && config.dateTo && config.dateFrom > config.dateTo && (
+              <span className="field-hint" style={{ color: "#c00" }}>
+                "From" date must be on or before "To" date.
+              </span>
+            )}
+          </>
         )}
       </div>
 
@@ -243,7 +250,15 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
         <button
           className="btn-primary"
           onClick={onRun}
-          disabled={loading || !config.parsedUrl || !config.outputUrl}
+          disabled={
+            loading ||
+            !config.parsedUrl ||
+            !config.outputUrl ||
+            (config.periodType === "custom" &&
+              (!config.dateFrom ||
+                !config.dateTo ||
+                config.dateFrom > config.dateTo))
+          }
         >
           {loading ? <><span className="spinner" /> Running financial calculations…</> : "Generate Report →"}
         </button>

@@ -66,6 +66,7 @@ Step 4 has a "Download QuickBooks CSV" button that generates a client-side CSV o
 ## UI History / Hidden Features
 
 - **Bi-Weekly period type hidden from UI (2026-04-20)**: The "Bi-Weekly" radio option was removed from Step 3 because the association moved to monthly (and occasional custom-range) pay cycles. The backend logic in `api/financial.js` is still intact — only `src/components/Step3Financial.jsx` was changed (radio array + conditional block removed, dead state/helper/useEffect left in place for reversibility). To restore the UI: add `"biweekly"` back to the radio array in `Step3Financial.jsx` line 82 and re-add the biweekly conditional block from git history.
+- **Custom Range date format standardised (2026-04-20)**: The Custom Range "From" and "To" fields were changed from free-text `D-Mon` inputs (e.g. "1-Mar") to native HTML5 date pickers that produce ISO `YYYY-MM-DD`. The backend `parseDateSimple` in `api/financial.js` now accepts both ISO and the legacy `D-Mon` format for backward compatibility. The Generate Report button is disabled if dateFrom > dateTo. Custom period label in the output spreadsheet now reads e.g. "Custom Mar 1–Mar 14 2026" (previously "Custom 1-Mar–14-Mar"). The YEAR=2026 constant in `api/financial.js` no longer constrains custom ranges — the picker carries the year itself, so cross-year ranges work; the YEAR constant only affects the legacy D-Mon fallback and the biweekly logic.
 
 ## Git Workflow
 
