@@ -95,6 +95,23 @@ export default function App() {
     finally { setLoading(false); }
   }, [financialConfig]);
 
+  // Step 4 → push pay advice tabs to each physician's individual sheet.
+  // Accepts an optional physicianResultsSubset so the front-end can batch
+  // calls to stay under Vercel Hobby's 10s function timeout (each batch sends
+  // only ~4 physicians' data instead of all 25). Returns { pushed, skipped,
+  // tabName } so Step4Results can render and accumulate the result.
+  const handlePushPayAdvice = useCallback(async (physicianResultsSubset) => {
+    if (!results) throw new Error("No results to push");
+    return apiPost("/api/push-pay-advice", {
+      sourceUrl: parseConfig.sourceUrl,
+      contactSheet: parseConfig.contactSheet,
+      physicianResults: physicianResultsSubset || results.physicianResults,
+      periodLabel: results.periodLabel,
+      periodStart: results.periodStart,
+      periodEnd: results.periodEnd,
+    });
+  }, [results, parseConfig.sourceUrl, parseConfig.contactSheet]);
+
   const handleReset = useCallback(() => {
     setStep(1); setParsedData(null); setResults(null); setCorrections({}); setError(null);
   }, []);
@@ -140,7 +157,13 @@ export default function App() {
           />
         )}
         {step === 4 && results && (
-          <Step4Results results={results} onReset={handleReset} onNewReport={() => setStep(3)} />
+          <Step4Results
+            results={results}
+            onReset={handleReset}
+            onNewReport={() => setStep(3)}
+            onPushPayAdvice={handlePushPayAdvice}
+            sourceUrl={parseConfig.sourceUrl}
+          />
         )}
       </main>
     </div>

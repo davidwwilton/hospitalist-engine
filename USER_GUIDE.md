@@ -106,6 +106,7 @@ You'll see KPI summary cards showing totals for the period, a simple per-physici
 
 - **Download QuickBooks CSV ↓** — Generates a CSV file locally with one row per physician and 13 columns (Physician, Pay Period, Period Start Date, Period End Date, 8h Shifts, 9h Shifts, Other Shifts, Payable Hours, Base Pay, Stat Pay, Gross Pay, Total Holdback, Net Pay). Filename follows the pattern `VHA Hospitalist Payroll 2026-04-15 to 2026-04-28.csv`. Forward this file to the accountant so they can enter biweekly interim payments in QuickBooks.
 - **Open Report ↗** — Opens the financial report Google Sheet with the detailed tabs below.
+- **Push Pay Advice →** — Sends a per-physician pay advice tab to each physician's personal Google Sheet. See A14 for full details.
 
 The financial report spreadsheet contains these tabs, in the order the finance lead will want to use them:
 
@@ -471,7 +472,55 @@ Under the biweekly + quarterly payment structure, the HA invoice is split into *
 
 **Historical note.** Before April 2026, the engine invoiced the HA for Gross Pay (including Stat Premium), which was a bug — stat premium had to be paid from HA funds that the HA had never provided. The fix excludes stat premium from the HA invoice; it is now funded internally from the cost share + operational holdback pool. Existing pre-April-2026 output spreadsheets that were re-run with the new code will show a `HA Invoice` tab with stale data — delete it manually.
 
-### A13. What the Engine Does Not Do
+### A13. Push Pay Advice to Physicians
+
+Step 4 has a **Push Pay Advice →** button that sends a per-physician pay advice tab to each physician's personal Google Sheet.
+
+**Setup — one-time per physician.**
+
+1. Each physician has their own pay advice Google Sheet living in the `admin.vha` Google Drive.
+2. The URL of each physician's sheet must be entered in **column Q of the Contact Info tab** in the source schedule, in the row that matches the physician's canonical name.
+3. Each pay advice sheet must be **shared with the service account email as Editor** (the service account email is in `hospitalist-engine-e80aedcf7cc2.json`). If the sheet isn't shared, the push will fail for that physician with a "Permission denied" message.
+
+**Test workflow.** Populate column Q for one or two physicians first, push, verify the tab looks right in their sheet, then fill in URLs for the remaining physicians. The button automatically skips any physician whose column Q is blank, so a partial rollout is safe.
+
+**What gets written.** A new tab is added to each physician's sheet, named `Pay Advice {start}-{end} {year}` (for example `Pay Advice Apr 1-14 2026`). The tab contains:
+
+- A header row showing the period label and a "Generated" timestamp
+- A note explaining that the figures are interim cycle (after-hours premiums paid quarterly)
+- One row per shift the physician worked in the period, with these columns:
+
+| Column | Meaning |
+|--------|---------|
+| Date | Shift date as it appears in the source schedule |
+| Shift | Shift code (e.g. LB8A, UCC/Ward, HOME) |
+| Reg Hrs | Regular hours on this shift |
+| Evening Hrs | Hours that earn the evening premium (paid quarterly) |
+| Overnight Hrs | Hours that earn the overnight premium (paid quarterly) |
+| Weekend Day Hrs | Hours that earn the Weekend Day Premium (paid quarterly) |
+| Base Pay | Regular hours × base rate |
+| Stat Pay | Stat holiday premium for this shift (interim — paid alongside base) |
+| Cost Share | Per-shift Cost Share holdback |
+| Op Holdback | Per-shift Operational Holdback |
+| Total Holdback | Cost Share + Op Holdback |
+| Net Pay | Base + Stat − Total Holdback |
+
+A final **TOTAL** row sums the Net Pay column.
+
+**Why after-hours premiums show only as hours, not dollars.** The pay advice represents the **interim** pay cycle (biweekly run). After-hours premium dollars (evening, overnight, weekend day) are paid in a separate quarterly lump sum when HA reimbursement arrives, so they're not in the Net Pay column. The hours columns remain visible so physicians can see what after-hours work they did during the period — they'll receive those dollars at the next quarterly run.
+
+**Re-pushing the same period.** If you re-run the financial engine and re-push, the existing tab for that period (matched by tab name) is overwritten with the new numbers. Earlier periods' tabs are not touched.
+
+**Why it takes a minute.** The push is broken into batches of 4 physicians per server request to stay under Vercel's serverless function timeout (free tier limit is 10 seconds). With 25 physicians, that's about 7 sequential batches, totalling roughly 50-60 seconds in your browser. While it runs, you'll see "Batch 3 of 7 (12 of 25 physicians processed)" updating in real time, and the Pushed/Skipped lists below will fill in batch by batch — so you're never waiting blind for the whole push to finish. If a batch fails midway, the already-pushed physicians are saved in the result panel and you can click Push Pay Advice again to retry.
+
+**Result panel.** After pushing, the UI shows:
+
+- **Pushed:** count + per-physician list with a link to each sheet
+- **Skipped:** count + per-physician list with the reason (no URL configured, sheet not shared, invalid URL, etc.)
+
+If a physician is in the "Skipped" list with "Permission denied", add the service account email as Editor on their sheet and click Push Pay Advice again.
+
+### A14. What the Engine Does Not Do
 
 A few common expectations that the engine deliberately doesn't implement, so you don't have to wonder:
 
@@ -497,3 +546,4 @@ The engine does not apply different base rates by physician, shift type, or day 
 - Stat Holiday Premium is no longer invoiced to the health authority — it is funded internally from the holdback pool and paid to physicians in their biweekly interim alongside base pay.
 - Terminology change throughout: "Bonus" renamed to "Premium" (Evening Premium, Overnight Premium, Weekend Day Premium, Stat Holiday Premium). Internal JavaScript variable names retain the legacy "bonus" labels for code stability.
 - New QuickBooks CSV download button on Step 4. Generates `VHA Hospitalist Payroll YYYY-MM-DD to YYYY-MM-DD.csv` with 13 columns for the accountant's biweekly payment workflow.
+- New **Push Pay Advice** button on Step 4. Sends a per-physician pay advice tab to each physician's personal Google Sheet. URLs come from Contact Info column Q. See Appendix A13 for setup and rollout workflow.
