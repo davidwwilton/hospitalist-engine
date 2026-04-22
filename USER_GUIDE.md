@@ -487,7 +487,7 @@ Step 4 has a **Push Pay Advice →** button that sends a per-physician pay advic
 **What gets written.** A new tab is added to each physician's sheet, named `Pay Advice {start}-{end} {year}` (for example `Pay Advice Apr 1-14 2026`). The tab contains:
 
 - A header row showing the period label
-- A note explaining the cycle: "Interim pay cycle. After Hours Premiums and Volume Incentive paid quarterly."
+- A note explaining the cycle: "Interim pay cycle. After Hours Premiums and Quality, Coverage and Volume Incentives paid quarterly."
 - A "Generated" timestamp for audit reference
 - One row per shift the physician worked in the period, with these columns:
 
