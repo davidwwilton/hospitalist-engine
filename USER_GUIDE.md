@@ -495,9 +495,9 @@ Step 4 has a **Push Pay Advice →** button that sends a per-physician pay advic
 | Date | Shift date as it appears in the source schedule |
 | Shift | Shift code (e.g. LB8A, UCC/Ward, HOME) |
 | Reg Hrs | Regular hours on this shift |
-| Evening Hrs | Hours that earn the evening premium (paid quarterly) |
-| Overnight Hrs | Hours that earn the overnight premium (paid quarterly) |
-| Weekend Day Hrs | Hours that earn the Weekend Day Premium (paid quarterly) |
+| Evening Premium Hours | Hours that earn the evening premium (paid quarterly) |
+| Overnight Premium Hours | Hours that earn the overnight premium (paid quarterly) |
+| Weekend/Stat Day Premium Hours | Hours that earn the Weekend Day Premium — applies to daytime shifts on Sat/Sun and stat holidays (paid quarterly) |
 | Base Pay | Regular hours × base rate |
 | Stat Pay | Stat holiday premium for this shift (interim — paid alongside base) |
 | Cost Share | Per-shift Cost Share holdback |

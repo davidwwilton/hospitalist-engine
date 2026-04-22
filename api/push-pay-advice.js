@@ -97,7 +97,8 @@ async function ensureSheet(sheets, spreadsheetId, title) {
 //   last: TOTAL row (totals net pay only)
 function buildAdviceValues(periodLabel, generatedDate, shiftDetails) {
   const headers = [
-    "Date","Shift","Reg Hrs","Evening Hrs","Overnight Hrs","Weekend Day Hrs",
+    "Date","Shift","Reg Hrs",
+    "Evening Premium Hours","Overnight Premium Hours","Weekend/Stat Day Premium Hours",
     "Base Pay","Stat Pay","Cost Share","Op Holdback","Total Holdback","Net Pay",
   ];
   const fh = n => Number(n).toFixed(2);
