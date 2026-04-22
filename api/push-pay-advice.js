@@ -134,7 +134,8 @@ function buildAdviceValues(periodLabel, generatedDate, shiftDetails) {
 
   return [
     [`Pay Advice — ${periodLabel}`],
-    [`Generated ${generatedDate}. Interim pay cycle. After-hours premiums paid quarterly.`],
+    [`Interim pay cycle. After Hours Premiums and Volume Incentive paid quarterly.`],
+    [`Generated ${generatedDate}`],
     [],
     headers,
     ...shiftRows,
