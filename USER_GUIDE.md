@@ -320,13 +320,15 @@ The Weekend Day Premium is included in the "After Hours" total (see A9) even tho
 
 ### A7. Stat Holiday Premium (formerly Stat Holiday Bonus)
 
-If a shift's date matches a date in the "Stat Holidays" tab of your source schedule, every hour on that shift earns an extra 0.5 × base rate on top of everything else. This applies to the full regular hours of the shift, regardless of whether it's a day, evening, or overnight shift.
+If a shift's date matches a date in the "Stat Holidays" tab of your source schedule, every regular hour on that shift earns an extra 0.5 × **net** base rate (i.e. base rate after Cost Share and Operational Holdback are deducted) on top of everything else. This applies to the full regular hours of the shift, regardless of whether it's a day, evening, or overnight shift.
 
 ```
-stat_premium = regular_hrs × (0.5 × base_rate)
+stat_premium = regular_hrs × 0.5 × (base_rate − cost_share_per_hour − op_holdback_per_hour)
 ```
 
-Example: a physician working an LB8A day shift on a stat holiday (9 regular hours) with a base rate of $200.10 earns a stat premium of `9 × (0.5 × $200.10) = 9 × $100.05 = $900.45` on top of their base pay and any other applicable premiums.
+Example: a physician working an LB8A day shift on a stat holiday (9 regular hours) with a base rate of $200.10, Cost Share of $1.40/hr, and Operational Holdback of $7.45/hr earns a stat premium of `9 × 0.5 × ($200.10 − $1.40 − $7.45) = 9 × 0.5 × $191.25 = 9 × $95.625 = $860.625` on top of their base pay and any other applicable premiums.
+
+**Historical note.** Before April 2026, the stat premium formula used the gross base rate (`0.5 × base_rate = $100.05/hr`), which produced a 9-hour shift premium of $900.45. The change to the net rate reduces stat premium payouts by approximately 4.4% per hour, leaving more of the holdback pool available for operational use.
 
 Stat holiday dates also receive the Weekend Day Premium on the same daytime-only rule as Saturday/Sunday. So a pure daytime stat shift earns **both** the stat premium and the Weekend Day Premium. An evening or overnight stat shift earns the stat premium but not the Weekend Day Premium (same reasoning as A6).
 
@@ -401,7 +403,7 @@ base_pay        = regular_hrs × base_rate
 eve_premium       = evening_hrs × evening_rate
 on_premium        = overnight_hrs × overnight_rate
 weekend_premium   = (is_weekend_or_stat AND daytime_only) ? regular_hrs × evening_rate : 0
-stat_premium      = is_stat_holiday ? regular_hrs × (0.5 × base_rate) : 0
+stat_premium      = is_stat_holiday ? regular_hrs × 0.5 × (base_rate − cost_share_per_hour − op_holdback_per_hour) : 0
 
 after_hours     = eve_premium + on_premium + weekend_premium
 base_plus_after = base_pay + after_hours

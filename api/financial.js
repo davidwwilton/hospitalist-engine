@@ -193,8 +193,14 @@ function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, 
       // isn't double-billed. The practice absorbs the overlap on physician pay.
       const shiftInvoiceableBasePay = invoiceableHrs * baseRate;
 
-      // Stat holiday bonus: 0.5 × baseRate on all shift hours
-      const statBonus = isStatHoliday ? regHrs * (0.5 * baseRate) : 0;
+      // Stat holiday premium: 0.5 × NET base pay (after holdback) on regular hours.
+      // Per-hour stat premium = 0.5 × (baseRate − costSharePerHour − opHoldbackPerHour).
+      // Changed 2026-04-20 from 0.5 × baseRate (gross). The change reduces stat premium
+      // payouts by ~4.4% per hour and leaves more of the holdback pool for operational
+      // use. The stat premium itself is still NOT subject to further holdback deduction.
+      const statBonus = isStatHoliday
+        ? regHrs * 0.5 * (baseRate - costSharePerHour - opHoldbackPerHour)
+        : 0;
 
       // After hours = evening + overnight + weekend bonuses (stat bonus tracked separately)
       const afterHours = eveBonus + onBonus + weekendBonus;
