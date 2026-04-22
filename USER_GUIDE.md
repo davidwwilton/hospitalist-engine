@@ -494,15 +494,15 @@ Step 4 has a **Push Pay Advice →** button that sends a per-physician pay advic
 |--------|---------|
 | Date | Shift date as it appears in the source schedule |
 | Shift | Shift code (e.g. LB8A, UCC/Ward, HOME) |
-| Reg Hrs | Regular hours on this shift |
+| Regular Hours | Regular hours on this shift |
 | Evening Premium Hours | Hours that earn the evening premium (paid quarterly) |
 | Overnight Premium Hours | Hours that earn the overnight premium (paid quarterly) |
 | Weekend/Stat Day Premium Hours | Hours that earn the Weekend Day Premium — applies to daytime shifts on Sat/Sun and stat holidays (paid quarterly) |
 | Base Pay | Regular hours × base rate |
-| Stat Pay | Stat holiday premium for this shift (interim — paid alongside base) |
+| Stat Pay Bonus | Stat holiday premium for this shift (interim — paid alongside base) |
 | Cost Share | Per-shift Cost Share holdback |
-| Op Holdback | Per-shift Operational Holdback |
-| Total Holdback | Cost Share + Op Holdback |
+| Operational Holdback | Per-shift Operational Holdback |
+| Total Holdback | Cost Share + Operational Holdback |
 | Net Pay | Base + Stat − Total Holdback |
 
 A final **TOTAL** row sums the Net Pay column.

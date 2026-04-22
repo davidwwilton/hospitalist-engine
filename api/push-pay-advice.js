@@ -97,9 +97,9 @@ async function ensureSheet(sheets, spreadsheetId, title) {
 //   last: TOTAL row (totals net pay only)
 function buildAdviceValues(periodLabel, generatedDate, shiftDetails) {
   const headers = [
-    "Date","Shift","Reg Hrs",
+    "Date","Shift","Regular Hours",
     "Evening Premium Hours","Overnight Premium Hours","Weekend/Stat Day Premium Hours",
-    "Base Pay","Stat Pay","Cost Share","Op Holdback","Total Holdback","Net Pay",
+    "Base Pay","Stat Pay Bonus","Cost Share","Operational Holdback","Total Holdback","Net Pay",
   ];
   const fh = n => Number(n).toFixed(2);
   const fm = n => Number(n).toFixed(2); // dollars without $ prefix so Sheets numeric formatting works
