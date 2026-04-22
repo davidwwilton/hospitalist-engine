@@ -98,7 +98,6 @@ async function ensureSheet(sheets, spreadsheetId, title) {
 function buildAdviceValues(periodLabel, generatedDate, shiftDetails) {
   const headers = [
     "Date","Shift","Regular Hours",
-    "Evening Premium Hours","Overnight Premium Hours","Weekend/Stat Day Premium Hours",
     "Base Pay","Stat Pay Bonus","Cost Share","Operational Holdback","Total Holdback","Net Pay",
   ];
   const fh = n => Number(n).toFixed(2);
@@ -118,9 +117,6 @@ function buildAdviceValues(periodLabel, generatedDate, shiftDetails) {
       sd.date || "",
       sd.shift || "",
       fh(sd.regular_hrs || 0),
-      fh(sd.evening_hrs || 0),
-      fh(sd.overnight_hrs || 0),
-      fh(sd.weekend_day_hrs || 0),
       fm(sd.base_pay || 0),
       fm(sd.stat_bonus || 0),
       fm(sd.cost_share || 0),
@@ -130,7 +126,7 @@ function buildAdviceValues(periodLabel, generatedDate, shiftDetails) {
     ];
   });
 
-  const totalRow = ["TOTAL","","","","","","","","","","", fm(totalNet)];
+  const totalRow = ["TOTAL","","","","","","","", fm(totalNet)];
 
   return [
     [`Pay Advice — ${periodLabel}`],

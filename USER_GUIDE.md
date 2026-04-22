@@ -496,9 +496,6 @@ Step 4 has a **Push Pay Advice →** button that sends a per-physician pay advic
 | Date | Shift date as it appears in the source schedule |
 | Shift | Shift code (e.g. LB8A, UCC/Ward, HOME) |
 | Regular Hours | Regular hours on this shift |
-| Evening Premium Hours | Hours that earn the evening premium (paid quarterly) |
-| Overnight Premium Hours | Hours that earn the overnight premium (paid quarterly) |
-| Weekend/Stat Day Premium Hours | Hours that earn the Weekend Day Premium — applies to daytime shifts on Sat/Sun and stat holidays (paid quarterly) |
 | Base Pay | Regular hours × base rate |
 | Stat Pay Bonus | Stat holiday premium for this shift (interim — paid alongside base) |
 | Cost Share | Per-shift Cost Share holdback |
@@ -508,7 +505,7 @@ Step 4 has a **Push Pay Advice →** button that sends a per-physician pay advic
 
 A final **TOTAL** row sums the Net Pay column.
 
-**Why after-hours premiums show only as hours, not dollars.** The pay advice represents the **interim** pay cycle (biweekly run). After-hours premium dollars (evening, overnight, weekend day) are paid in a separate quarterly lump sum when HA reimbursement arrives, so they're not in the Net Pay column. The hours columns remain visible so physicians can see what after-hours work they did during the period — they'll receive those dollars at the next quarterly run.
+**Scope of the interim advice.** The interim pay advice intentionally omits after-hours premium hours and dollars (evening, overnight, weekend day) and incentive payments (Quality, Coverage, Volume). All of these are paid in a separate quarterly cycle and will be itemised on a separate Quarterly Pay Advice tab when that workflow is built. The header line at the top of the tab reminds physicians of this — see the "Interim pay cycle. After Hours Premiums and Quality, Coverage and Volume Incentives paid quarterly." note.
 
 **Re-pushing the same period.** If you re-run the financial engine and re-push, the existing tab for that period (matched by tab name) is overwritten with the new numbers. Earlier periods' tabs are not touched.
 
