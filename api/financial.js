@@ -117,8 +117,29 @@ function detectOverlaps(sorted) {
 }
 
 function runPipeline(parsedRows, periodStart, periodEnd, baseRate, eveningRate, overnightRate, costSharePerHour, opHoldbackPerHour) {
-  const startISO=dateISO(periodStart), endISO=dateISO(periodEnd);
-  const inPeriod = parsedRows.filter(r => r.Date_ISO >= startISO && r.Date_ISO <= endISO);
+  // Date filter: parse each row's Date_ISO into a Date object and compare
+  // numerically against periodStart/periodEnd. Hardened 2026-04-20 — previous
+  // implementation compared ISO strings lexically, which works only when both
+  // sides are well-formed YYYY-MM-DD. Any malformed Date_ISO (e.g. unpadded
+  // months, m/d/y display strings if Sheets re-formatted the column) would
+  // silently slip through and produce wrong inclusion. Rows whose Date_ISO
+  // doesn't strictly match YYYY-MM-DD are excluded and logged.
+  const startMs = periodStart.getTime();
+  const endMs   = periodEnd.getTime();
+  let malformedCount = 0;
+  const inPeriod = parsedRows.filter(r => {
+    const raw = String(r.Date_ISO || "").trim();
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) {
+      if (raw) malformedCount++;
+      return false;
+    }
+    const t = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3])).getTime();
+    return t >= startMs && t <= endMs;
+  });
+  if (malformedCount > 0) {
+    console.warn(`runPipeline: skipped ${malformedCount} parsed rows with malformed Date_ISO. The Parsed Schedule may have been edited or re-formatted.`);
+  }
   if (!inPeriod.length) return { physicianResults:{}, overlapLog:[], kpi:{} };
 
   const byPhysician = {};

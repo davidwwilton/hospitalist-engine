@@ -115,30 +115,52 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
 
         {config.periodType === "custom" && (
           <>
+            {/* Type the date in ISO format (YYYY-MM-DD). Native HTML5 date
+                pickers were removed 2026-04-20 because they were intermittently
+                emitting wrong values (financial runs included shifts outside
+                the chosen range). Manual ISO entry is reliable. */}
             <div className="form-row">
               <div className="form-group">
                 <label>From</label>
                 <input
-                  type="date"
+                  type="text"
                   className="form-input"
+                  placeholder="YYYY-MM-DD (e.g. 2026-04-01)"
+                  pattern="\d{4}-\d{2}-\d{2}"
+                  inputMode="numeric"
                   value={config.dateFrom}
-                  max={config.dateTo || undefined}
-                  onChange={(e) => update("dateFrom", e.target.value)}
+                  onChange={(e) => update("dateFrom", e.target.value.trim())}
                 />
               </div>
               <div className="form-group">
                 <label>To</label>
                 <input
-                  type="date"
+                  type="text"
                   className="form-input"
+                  placeholder="YYYY-MM-DD (e.g. 2026-04-14)"
+                  pattern="\d{4}-\d{2}-\d{2}"
+                  inputMode="numeric"
                   value={config.dateTo}
-                  min={config.dateFrom || undefined}
-                  onChange={(e) => update("dateTo", e.target.value)}
+                  onChange={(e) => update("dateTo", e.target.value.trim())}
                 />
               </div>
             </div>
-            {config.dateFrom && config.dateTo && config.dateFrom > config.dateTo && (
-              <span className="field-hint" style={{ color: "#c00" }}>
+            <span className="field-hint">Format: YYYY-MM-DD (year-month-day, four digits then two digits then two digits, separated by dashes).</span>
+            {config.dateFrom && !/^\d{4}-\d{2}-\d{2}$/.test(config.dateFrom) && (
+              <span className="field-hint" style={{ color: "#c00", display: "block" }}>
+                "From" date must be in YYYY-MM-DD format.
+              </span>
+            )}
+            {config.dateTo && !/^\d{4}-\d{2}-\d{2}$/.test(config.dateTo) && (
+              <span className="field-hint" style={{ color: "#c00", display: "block" }}>
+                "To" date must be in YYYY-MM-DD format.
+              </span>
+            )}
+            {config.dateFrom && config.dateTo &&
+             /^\d{4}-\d{2}-\d{2}$/.test(config.dateFrom) &&
+             /^\d{4}-\d{2}-\d{2}$/.test(config.dateTo) &&
+             config.dateFrom > config.dateTo && (
+              <span className="field-hint" style={{ color: "#c00", display: "block" }}>
                 "From" date must be on or before "To" date.
               </span>
             )}
@@ -257,6 +279,8 @@ export default function Step3Financial({ config, onChange, onRun, onBack, loadin
             (config.periodType === "custom" &&
               (!config.dateFrom ||
                 !config.dateTo ||
+                !/^\d{4}-\d{2}-\d{2}$/.test(config.dateFrom) ||
+                !/^\d{4}-\d{2}-\d{2}$/.test(config.dateTo) ||
                 config.dateFrom > config.dateTo))
           }
         >
